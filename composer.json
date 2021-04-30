@@ -1,7 +1,5 @@
 {
     "require": {
-        "guzzlehttp/guzzle": "^7.0.1",
-        "http-interop/http-factory-guzzle": "^1.0",
         "firebase/php-jwt": "^5.2"
     }
 }

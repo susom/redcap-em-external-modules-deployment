@@ -71,18 +71,22 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         // Other code to run when object is instantiated
 
         if (isset($_GET['pid'])) {
+            $this->emLog("construct before init");
             $this->setProject(new Project(filter_var($_GET['pid'], FILTER_SANITIZE_STRING)));
 
             if (!defined('NOAUTH') || NOAUTH == false) {
                 // get user right then set the user.
                 $right = REDCap::getUserRights();
                 $user = $right[USERID];
-                $this->setUser(new User($user));
+                if ($user != null) {
+                    $this->setUser(new User($user));
+                }
+
             }
 
             // set repositories
             $this->setRepositories();
-
+            $this->emLog("setting guzzle ");
             // initiate guzzle client to get access token
             $this->setGuzzleClient(new Client());
 

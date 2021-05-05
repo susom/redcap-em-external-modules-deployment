@@ -152,33 +152,63 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         }
     }
 
-    public function getRepositoryDefaultBranchLatestCommit($key, $branch = '')
+    /**
+     * @param $key
+     * @return mixed
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     */
+    public function getRepositoryDefaultBranch($key)
+    {
+        $response = $this->getGuzzleClient()->get('https://api.github.com/repos/susom/' . $key, [
+            'headers' => [
+                'Authorization' => 'token ' . $this->getAccessToken(),
+                'Accept' => 'application/vnd.github.v3+json'
+            ]
+        ]);
+        $repo = json_decode($response->getBody());
+        return $repo->default_branch;
+    }
+
+    /**
+     * @param $key
+     * @param $branch
+     * @return mixed
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     */
+    public function getRepositoryBranchCommits($key, $branch)
+    {
+        if (!$key || !$branch) {
+            throw new \Exception("data is missing");
+        }
+        $commits = $this->getGuzzleClient()->get('https://api.github.com/repos/susom/' . $key . '/commits/' . $branch, [
+            'headers' => [
+                'Authorization' => 'token ' . $this->getAccessToken(),
+                'Accept' => 'application/vnd.github.v3+json'
+            ]
+        ]);
+        return json_decode($commits->getBody());
+    }
+
+    /**
+     * @param string $key
+     * @param string $branch
+     * @return array
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     */
+    public function getRepositoryDefaultBranchLatestCommit($key, $branch = ''): array
     {
         try {
 
             // get default branch
             if ($branch == '') {
-                $response = $this->getGuzzleClient()->get('https://api.github.com/repos/susom/' . $key, [
-                    'headers' => [
-                        'Authorization' => 'token ' . $this->getAccessToken(),
-                        'Accept' => 'application/vnd.github.v3+json'
-                    ]
-                ]);
-                $repo = json_decode($response->getBody());
-                $branch = $repo->default_branch;
+                $branch = $this->getRepositoryDefaultBranch($key);
             }
 
 
             // get latest commit for default branch
-            $commits = $this->getGuzzleClient()->get('https://api.github.com/repos/susom/' . $key . '/commits/' . $branch, [
-                'headers' => [
-                    'Authorization' => 'token ' . $this->getAccessToken(),
-                    'Accept' => 'application/vnd.github.v3+json'
-                ]
-            ]);
-            $commit = json_decode($commits->getBody());
+            $commit = $this->getRepositoryBranchCommits($key, $branch);
             //return first commit in the array which is the last one.
-            return $commit;
+            return array($branch, $commit);
         } catch (\GuzzleHttp\Exception\RequestException $e) {
             $this->emError("Exception pulling last commit for $key: " . $e->getMessage());
         }
@@ -697,12 +727,14 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
      * @param string $branch
      * @return string
      * @throws \Exception
+     * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    public function updateRepositoryDefaultBranchLatestCommit($key, $recordId, $branch = '')
+    public function updateRepositoryDefaultBranchLatestCommit($key, $recordId, $branch = ''): string
     {
-        $commit = $this->getRepositoryDefaultBranchLatestCommit($key, $branch);
+        list($branch, $commit) = $this->getRepositoryDefaultBranchLatestCommit($key, $branch);
         $data[REDCap::getRecordIdField()] = $recordId;
         $data['current_git_commit'] = $commit->sha;
+        $data['git_default_branch'] = $branch;
         $data['date_of_latest_commit'] = $commit->commit->author->date;
         $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($this->getFirstEventId());
         $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
@@ -730,7 +762,8 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                     } else {
                         $commit = $repository[$this->getFirstEventId()]['current_git_commit'];
                     }
-                    echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $directory . "," . $array['branch'] . "," . $commit . "\n";
+                    // only write if branch and last commit different from what is saved in redcap.
+                    echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $directory . "," . $array['branch'] != $repository[$this->getFirstEventId()]['git_branch_default'] ? $array['branch'] : '' . "," . $commit != $repository[$this->getFirstEventId()]['current_git_commit'] ? $commit : '' . "\n";
                     break;
                 }
             }

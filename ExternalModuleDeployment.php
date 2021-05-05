@@ -101,6 +101,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
     public function updateREDCapRepositoryWithLastCommit($payload)
     {
+        // TODO how to differentiate  the different branches on different redcap instances (prod, SHC, etc...)
         foreach ($this->getRedcapRepositories() as $recordId => $repository) {
             $key = Repository::getGithubKey($repository[$this->getFirstEventId()]['git_url']);
             // TODO probably we can add another check for before commit and compare it with whatever in redcap

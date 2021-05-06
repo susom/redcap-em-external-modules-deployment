@@ -169,7 +169,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             $key = Repository::getGithubKey($repository[$this->getFirstEventId()]['git_url']);
             // TODO probably we can add another check for before commit and compare it with whatever in redcap
             if ($key == $payload['repository']['name']) {
-                list($branch, $eventId) = $this->determineEventIdWhereCommitToBeSaved($payload);
+                list($eventId, $branch) = $this->determineEventIdWhereCommitToBeSaved($payload);
                 $data[REDCap::getRecordIdField()] = $recordId;
                 $data['git_branch'] = $branch;
                 $data['git_commit'] = $payload['after'];

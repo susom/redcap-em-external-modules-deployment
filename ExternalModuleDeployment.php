@@ -168,6 +168,28 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     }
 
     /**
+     * @param $branch
+     * @param $eventId
+     * @return bool
+     */
+    public function shouldTriggerTravisBuild($branch, $eventId): bool
+    {
+        // if first event then its for default instances
+        if ($eventId == $this->getFirstEventId()) {
+            return true;
+        }
+
+        // check if the branch is mapped to an event which mean this branch represent instance.
+        foreach ($this->getBranchesEventsMap() as $id => $item) {
+            if ($branch == $item['branch-name']) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * @throws \Exception
      */
     public function updateREDCapRepositoryWithLastCommit($payload)
@@ -185,6 +207,11 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($eventId);
                 $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
                 if (empty($response['errors'])) {
+                    if ($this->shouldTriggerTravisBuild($branch, $eventId)) {
+                        // trigger Travis CI build to the commit branch. which
+                        //$this->triggerTravisCIBuild($branch, $payload['after']);
+                        $this->emLog('Travis should be triggered! for ' . $branch);
+                    }
                     $this->emLog("webhook triggered for EM $key last commit hash: " . $payload['after']);
                     die();
                 } else {
@@ -654,7 +681,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     /**
      * this function will call travis CI api
      */
-    public function triggerTravisCIBuild()
+    public function triggerTravisCIBuild($branch)
     {
         $response = $this->getGuzzleClient()->post('https://api.travis-ci.com/repo/susom%2Fredcap-build/requests', [
             'headers' => [
@@ -664,7 +691,8 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 'Travis-API-Version' => '3',
             ],
             'body' => json_encode(array('request' => array(
-                'branch' => $this->getDefaultREDCapBuildRepoBranch(),
+                //'branch' => $this->getDefaultREDCapBuildRepoBranch(),
+                'branch' => $branch,
                 'sha' => $this->getShaForLatestDefaultBranchCommitForREDCapBuild()
             )))
         ]);

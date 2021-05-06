@@ -195,7 +195,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     public function updateREDCapRepositoryWithLastCommit($payload)
     {
 
-        // Test master remove TODO
+        // Test master remove
         foreach ($this->getRedcapRepositories() as $recordId => $repository) {
             $key = Repository::getGithubKey($repository[$this->getFirstEventId()]['git_url']);
             // TODO probably we can add another check for before commit and compare it with whatever in redcap

@@ -8,6 +8,7 @@ try {
     //test
     $module->verifyWebhookSecret();
 
+    // test commit to development branch
     # test commit
     if (isset($_POST) && !empty($_POST)) {
         $payload = json_decode($_POST['payload'], true);

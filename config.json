@@ -23,13 +23,7 @@
     "links": {
         "project": [
             {
-                "name": "Project Cost/Fees",
-                "icon": "fas fa-donate",
-                "url": "pages/cost_overview.php",
-                "show-header-and-footer": true
-            },
-            {
-                "name": "Github Test Page",
+                "name": "EM Deployment Test Page",
                 "icon": "fas fa-donate",
                 "url": "pages/github_test.php",
                 "show-header-and-footer": true

@@ -238,7 +238,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     public function getRepositoryBranches($key)
     {
         if (!$key) {
-            throw new \Exception("data is missing");
+            throw new \Exception("data is missing $key");
         }
         $commits = $this->getGuzzleClient()->get('https://api.github.com/repos/susom/' . $key . '/branches', [
             'headers' => [

@@ -79,7 +79,8 @@ try {
 
     //$module->getGitRepositoriesDirectories();
     # test secret
-    echo $module->getUrl('pages/generate_config.php', true, true);
+//    echo $module->getUrl('pages/generate_config.php', true, true);
+    echo $module->getUrl('pages/webhook.php', true, true);
     if (isset($_GET['update_commits'])) {
         $module->updateREDCapRepositoriesWithLastCommit();
     }

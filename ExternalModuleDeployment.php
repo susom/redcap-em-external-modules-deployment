@@ -33,6 +33,7 @@ use GuzzleHttp\Client;
  * @property string $defaultREDCapBuildRepoBranch
  * @property string $ShaForLatestDefaultBranchCommitForREDCapBuild
  * @property array $gitRepositoriesDirectories
+ * @property array $branchesEventsMap
  */
 class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 {
@@ -65,6 +66,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
     private $gitRepositoriesDirectories;
 
+    private $branchesEventsMap;
     public function __construct()
     {
         parent::__construct();
@@ -90,6 +92,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             // initiate guzzle client to get access token
             $this->setGuzzleClient(new Client());
 
+            $this->setBranchesEventsMap();
             //authenticate github client
             // no longer needed we will do all calls manually package is not fully functional
             //$this->getClient()->authenticate($this->getAccessToken(), null, \Github\Client::AUTH_ACCESS_TOKEN);
@@ -140,14 +143,19 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
         $miscBranchEventId = '';
         // check if the branch one of the instances events
+        foreach ($this->getBranchesEventsMap() as $id => $item) {
+            // if not our branch is it misc branch to use it in case no event found
+            if ($commitBranch == $item['branch-name']) {
+                return array($item['branch-event'], $commitBranch);
+            }
+        }
+
         $arms = $this->getProject()->events;// !!!!
         foreach ($arms as $arm) {
             $events = $arm->events;
             foreach ($events as $id => $event) {
                 // if not our branch is it misc branch to use it in case no event found
-                if ($commitBranch == $event['descrip']) {
-                    return array($id, $commitBranch);
-                } elseif ($event['descrip'] == 'misc') {
+                if ($event['descrip'] == 'misc') {
                     $miscBranchEventId = $id;
                 }
             }
@@ -850,4 +858,22 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
         }
     }
+
+    /**
+     * @return array
+     */
+    public function getBranchesEventsMap(): array
+    {
+        return $this->branchesEventsMap;
+    }
+
+    /**
+     * @param array $branchesEventsMap
+     */
+    public function setBranchesEventsMap(): void
+    {
+        $this->branchesEventsMap = $this->getSubSettings('branches-events-map', $this->getProjectId());;
+    }
+
+
 }

@@ -126,12 +126,12 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
      * @return array
      * @throws \Exception
      */
-    private function determineEventIdWhereCommitToBeSaved($payload)
+    private function determineEventIdWhereCommitToBeSaved($payload): array
     {
         // get default branch
         $defaultBranch = $payload['repository']['default_branch'];
 
-        $commitBranch = $this->getCommitBranch($payload['repository']['name'], $payload['repository']['head_commit']['id']);
+        $commitBranch = $this->getCommitBranch($payload['repository']['name'], $payload['after']);
 
         // if commit branch is same as default then save to first event id
         if ($commitBranch == $defaultBranch) {

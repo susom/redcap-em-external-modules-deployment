@@ -33,6 +33,7 @@ use GuzzleHttp\Client;
  * @property string $defaultREDCapBuildRepoBranch
  * @property string $ShaForLatestDefaultBranchCommitForREDCapBuild
  * @property array $gitRepositoriesDirectories
+ * @property array $branchesEventsMap
  */
 class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 {
@@ -65,6 +66,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
     private $gitRepositoriesDirectories;
 
+    private $branchesEventsMap;
     public function __construct()
     {
         parent::__construct();
@@ -90,6 +92,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             // initiate guzzle client to get access token
             $this->setGuzzleClient(new Client());
 
+            $this->setBranchesEventsMap();
             //authenticate github client
             // no longer needed we will do all calls manually package is not fully functional
             //$this->getClient()->authenticate($this->getAccessToken(), null, \Github\Client::AUTH_ACCESS_TOKEN);
@@ -99,6 +102,74 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         }
     }
 
+    /**
+     * @param $key
+     * @param $sha
+     * @return mixed
+     * @throws \Exception
+     */
+    private function getCommitBranch($key, $sha)
+    {
+        if (!$key || !$sha) {
+            throw new \Exception("data is missing branch with $key for sha: $sha");
+        }
+        $branches = $this->getRepositoryBranches($key);
+
+        foreach ($branches as $branch) {
+            if ($branch->commit->sha == $sha) {
+                return $branch->name;
+            }
+        }
+        throw new \Exception("could not find branch with $key for sha: $sha");
+    }
+
+
+    /**
+     * @param $payload
+     * @return array
+     * @throws \Exception
+     */
+    private function determineEventIdWhereCommitToBeSaved($payload): array
+    {
+        // get default branch
+        $defaultBranch = $payload['repository']['default_branch'];
+
+        $commitBranch = $this->getCommitBranch($payload['repository']['name'], $payload['after']);
+
+        // if commit branch is same as default then save to first event id
+        if ($commitBranch == $defaultBranch) {
+            return array($this->getFirstEventId(), $defaultBranch);
+        }
+
+        $miscBranchEventId = '';
+        // check if the branch one of the instances events
+        foreach ($this->getBranchesEventsMap() as $id => $item) {
+            // if not our branch is it misc branch to use it in case no event found
+            if ($commitBranch == $item['branch-name']) {
+                return array($item['branch-event'], $commitBranch);
+            }
+        }
+
+        $arms = $this->getProject()->events;// !!!!
+        foreach ($arms as $arm) {
+            $events = $arm->events;
+            foreach ($events as $id => $event) {
+                // if not our branch is it misc branch to use it in case no event found
+                if ($event['descrip'] == 'misc') {
+                    $miscBranchEventId = $id;
+                }
+            }
+        }
+        //we could not find misc or corresponding event
+        if ($miscBranchEventId == '') {
+            throw new \Exception("no event found for this commit. please check you event structure");
+        }
+        return array($miscBranchEventId, $commitBranch);
+    }
+
+    /**
+     * @throws \Exception
+     */
     public function updateREDCapRepositoryWithLastCommit($payload)
     {
         // TODO how to differentiate  the different branches on different redcap instances (prod, SHC, etc...)
@@ -106,10 +177,12 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             $key = Repository::getGithubKey($repository[$this->getFirstEventId()]['git_url']);
             // TODO probably we can add another check for before commit and compare it with whatever in redcap
             if ($key == $payload['repository']['name']) {
+                list($eventId, $branch) = $this->determineEventIdWhereCommitToBeSaved($payload);
                 $data[REDCap::getRecordIdField()] = $recordId;
-                $data['current_git_commit'] = $payload['after'];
+                $data['git_branch'] = $branch;
+                $data['git_commit'] = $payload['after'];
                 $data['date_of_latest_commit'] = $payload['commits'][0]['timestamp'];
-                $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($this->getFirstEventId());
+                $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($eventId);
                 $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
                 if (empty($response['errors'])) {
                     $this->emLog("webhook triggered for EM $key last commit hash: " . $payload['after']);
@@ -170,6 +243,20 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         return $repo->default_branch;
     }
 
+    public function getRepositoryBranches($key)
+    {
+        if (!$key) {
+            throw new \Exception("data is missing $key");
+        }
+        $commits = $this->getGuzzleClient()->get('https://api.github.com/repos/susom/' . $key . '/branches', [
+            'headers' => [
+                'Authorization' => 'token ' . $this->getAccessToken(),
+                'Accept' => 'application/vnd.github.v3+json'
+            ]
+        ]);
+        return json_decode($commits->getBody());
+    }
+
     /**
      * @param $key
      * @param $branch
@@ -179,7 +266,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     public function getRepositoryBranchCommits($key, $branch)
     {
         if (!$key || !$branch) {
-            throw new \Exception("data is missing");
+            throw new \Exception("data is missing repo with $key for branch: $branch");
         }
         $commits = $this->getGuzzleClient()->get('https://api.github.com/repos/susom/' . $key . '/commits/' . $branch, [
             'headers' => [
@@ -734,8 +821,8 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     {
         list($branch, $commit) = $this->getRepositoryDefaultBranchLatestCommit($key, $branch);
         $data[REDCap::getRecordIdField()] = $recordId;
-        $data['current_git_commit'] = $commit->sha;
-        $data['git_default_branch'] = $branch;
+        $data['git_commit'] = $commit->sha;
+        $data['git_branch'] = $branch;
         $data['date_of_latest_commit'] = $commit->commit->author->date;
         $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($this->getFirstEventId());
         $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
@@ -758,17 +845,35 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             foreach ($this->getGitRepositoriesDirectories() as $directory => $array) {
                 if ($array['key'] == $key) {
 
-                    if (!$repository[$this->getFirstEventId()]['current_git_commit']) {
+                    if (!$repository[$this->getFirstEventId()]['git_commit']) {
                         $commit = $this->updateRepositoryDefaultBranchLatestCommit($key, $recordId, $array['branch']);
                     } else {
-                        $commit = $repository[$this->getFirstEventId()]['current_git_commit'];
+                        $commit = $repository[$this->getFirstEventId()]['git_commit'];
                     }
                     // only write if branch and last commit different from what is saved in redcap.
-                    echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $directory . "," . $array['branch'] != $repository[$this->getFirstEventId()]['git_branch_default'] ? $array['branch'] : '' . "," . $commit != $repository[$this->getFirstEventId()]['current_git_commit'] ? $commit : '' . "\n";
+                    echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $directory . "," . $array['branch'] != $repository[$this->getFirstEventId()]['git_branch_default'] ? $array['branch'] : '' . "," . $commit != $repository[$this->getFirstEventId()]['git_commit'] ? $commit : '' . "\n";
                     break;
                 }
             }
 
         }
     }
+
+    /**
+     * @return array
+     */
+    public function getBranchesEventsMap(): array
+    {
+        return $this->branchesEventsMap;
+    }
+
+    /**
+     * @param array $branchesEventsMap
+     */
+    public function setBranchesEventsMap(): void
+    {
+        $this->branchesEventsMap = $this->getSubSettings('branches-events-map', $this->getProjectId());;
+    }
+
+
 }

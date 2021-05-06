@@ -80,6 +80,7 @@ try {
     //$module->getGitRepositoriesDirectories();
     # test secret
 //    echo $module->getUrl('pages/generate_config.php', true, true);
+    // test pushing commit to dev event.
     echo $module->getUrl('pages/webhook.php', true, true);
     if (isset($_GET['update_commits'])) {
         $module->updateREDCapRepositoriesWithLastCommit();

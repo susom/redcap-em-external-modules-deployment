@@ -108,7 +108,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     private function getCommitBranch($key, $sha)
     {
         if (!$key || !$sha) {
-            throw new \Exception("data is missing");
+            throw new \Exception("data is missing branch with $key for sha: $sha");
         }
         $branches = $this->getRepositoryBranches($key);
 
@@ -258,7 +258,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     public function getRepositoryBranchCommits($key, $branch)
     {
         if (!$key || !$branch) {
-            throw new \Exception("data is missing");
+            throw new \Exception("data is missing repo with $key for branch: $branch");
         }
         $commits = $this->getGuzzleClient()->get('https://api.github.com/repos/susom/' . $key . '/commits/' . $branch, [
             'headers' => [

@@ -34,6 +34,8 @@ use GuzzleHttp\Client;
  * @property string $ShaForLatestDefaultBranchCommitForREDCapBuild
  * @property array $gitRepositoriesDirectories
  * @property array $branchesEventsMap
+ * @property string $commitBranch
+ * @property int $branchEventId
  */
 class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 {
@@ -67,6 +69,11 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     private $gitRepositoriesDirectories;
 
     private $branchesEventsMap;
+
+    private $commitBranch;
+
+    private $branchEventId;
+
     public function __construct()
     {
         parent::__construct();
@@ -99,29 +106,10 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
             // set EM records saved in REDCap
             $this->setRedcapRepositories();
+
         }
     }
 
-    /**
-     * @param $key
-     * @param $sha
-     * @return mixed
-     * @throws \Exception
-     */
-    private function getCommitBranch($key, $sha)
-    {
-        if (!$key || !$sha) {
-            throw new \Exception("data is missing branch with $key for sha: $sha");
-        }
-        $branches = $this->getRepositoryBranches($key);
-
-        foreach ($branches as $branch) {
-            if ($branch->commit->sha == $sha) {
-                return $branch->name;
-            }
-        }
-        throw new \Exception("could not find branch with $key for sha: $sha");
-    }
 
 
     /**
@@ -407,6 +395,114 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     }
 
 
+    public function getFolderPath($folder)
+    {
+        $arr = explode("/", __DIR__);
+        $parts = array_slice($arr, -2, 2, true);
+        if (is_dir(implode("/", $parts) . '/../' . $folder)) {
+            return implode("/", $parts) . '/../' . $folder;
+        } elseif (is_dir('../' . $folder)) {
+            return '../' . $folder;
+        } elseif (is_dir(__DIR__ . '/../' . $folder)) {
+            return __DIR__ . '/../' . $folder;
+        }
+        return false;
+    }
+
+    /**
+     * @param array $gitRepositoriesDirectories
+     */
+    public function setGitRepositoriesDirectories(): void
+    {
+        $folders = scandir(__DIR__ . '/../');
+        $gitRepositoriesDirectories = array();
+        foreach ($folders as $folder) {
+            $path = $this->getFolderPath($folder);
+//            $this->emLog($path);
+//            $this->emLog(is_dir($path));
+            if ($folder == '.' || $folder == '..' || !$path) {
+                continue;
+            } else {
+                if (is_dir($path . '/.git')) {
+                    $content = explode("\n\t", file_get_contents($path . '/.git/config'));
+                    // url
+                    $matches = preg_grep('/^url/m', $content);
+                    $key = Repository::getGithubKey(end($matches));
+
+                    // branch
+                    $matches = preg_grep('/\[branch\s\"/m', $content);
+                    $branch = end($matches);
+                    $branch = explode("\n", $branch);
+                    $branch = end($branch);
+                    $regex = "(\[branch\s\")";
+                    $branch = preg_replace($regex, "", str_replace('"]', "", $branch));
+                    $gitRepositoriesDirectories[$folder] = array('key' => $key, 'branch' => $branch);
+                } elseif (file_exists($path . '/.gitrepo')) {
+                    $content = file_get_contents($path . '/.gitrepo');
+                    $parts = explode("\n\t", $content);
+                    $matches = preg_grep('/^remote?/m', $parts);
+                    $key = Repository::getGithubKey(end($matches));
+                    $matches = preg_grep('/^branch?/m', $parts);
+                    $branch = explode(" ", end($matches));
+                    $branch = end($branch);
+                    $gitRepositoriesDirectories[$folder] = array('key' => $key, 'branch' => $branch);
+                }
+            }
+        }
+        $this->gitRepositoriesDirectories = $gitRepositoriesDirectories;
+    }
+
+
+    /**
+     * @param string $key
+     * @param string $recordId
+     * @param string $branch
+     * @return string
+     * @throws \Exception
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     */
+    public function updateRepositoryDefaultBranchLatestCommit($key, $recordId, $branch = ''): string
+    {
+        list($branch, $commit) = $this->getRepositoryDefaultBranchLatestCommit($key, $branch);
+        $data[REDCap::getRecordIdField()] = $recordId;
+        $data['git_commit'] = $commit->sha;
+        $data['git_branch'] = $branch;
+        $data['date_of_latest_commit'] = $commit->commit->author->date;
+        $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($this->getFirstEventId());
+        $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
+        if (empty($response['errors'])) {
+            return $commit->sha;
+        } else {
+            throw new \Exception("cant update last commit for EM : " . $key);
+        }
+    }
+
+    /**
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     * @throws \Exception
+     */
+    public function generateREDCapBuildConfigCSV()
+    {
+        echo "HTTP_URL,DEST,BRANCH,COMMIT\n";
+        foreach ($this->getRedcapRepositories() as $recordId => $repository) {
+            $key = Repository::getGithubKey($repository[$this->getFirstEventId()]['git_url']);
+
+            foreach ($this->getGitRepositoriesDirectories() as $directory => $array) {
+                if ($array['key'] == $key) {
+
+                    if ($repository[$this->getBranchEventId()]['git_commit']) {
+                        $commit = $repository[$this->getBranchEventId()]['git_commit'];
+                    }
+                    // only write if branch and last commit different from what is saved in redcap.
+                    echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $directory . "," . ($this->getCommitBranch('', '') != $repository[$this->getFirstEventId()]['git_branch'] ? $this->getCommitBranch('', '') : '') . "," . ($commit != $repository[$this->getFirstEventId()]['git_commit'] ? $commit : '') . "\n";
+                    break;
+                }
+            }
+
+        }
+    }
+
+
     public function getExternalModuleUsage()
     {
 
@@ -641,7 +737,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         $param = array(
             'project_id' => $this->getProjectId(),
             'return_format' => 'array',
-            'events' => $this->getFirstEventId()
+//            'events' => $this->getBranchEventId()
         );
         $data = REDCap::getData($param);
 
@@ -780,114 +876,6 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
     }
 
-    public function getFolderPath($folder)
-    {
-        $arr = explode("/", __DIR__);
-        $parts = array_slice($arr, -2, 2, true);
-        if (is_dir(implode("/", $parts) . '/../' . $folder)) {
-            return implode("/", $parts) . '/../' . $folder;
-        } elseif (is_dir('../' . $folder)) {
-            return '../' . $folder;
-        } elseif (is_dir(__DIR__ . '/../' . $folder)) {
-            return __DIR__ . '/../' . $folder;
-        }
-        return false;
-    }
-
-    /**
-     * @param array $gitRepositoriesDirectories
-     */
-    public function setGitRepositoriesDirectories(): void
-    {
-        $folders = scandir(__DIR__ . '/../');
-        $gitRepositoriesDirectories = array();
-        foreach ($folders as $folder) {
-            $path = $this->getFolderPath($folder);
-//            $this->emLog($path);
-//            $this->emLog(is_dir($path));
-            if ($folder == '.' || $folder == '..' || !$path) {
-                continue;
-            } else {
-                if (is_dir($path . '/.git')) {
-                    $content = explode("\n\t", file_get_contents($path . '/.git/config'));
-                    // url
-                    $matches = preg_grep('/^url/m', $content);
-                    $key = Repository::getGithubKey(end($matches));
-
-                    // branch
-                    $matches = preg_grep('/\[branch\s\"/m', $content);
-                    $branch = end($matches);
-                    $branch = explode("\n", $branch);
-                    $branch = end($branch);
-                    $regex = "(\[branch\s\")";
-                    $branch = preg_replace($regex, "", str_replace('"]', "", $branch));
-                    $gitRepositoriesDirectories[$folder] = array('key' => $key, 'branch' => $branch);
-                } elseif (file_exists($path . '/.gitrepo')) {
-                    $content = file_get_contents($path . '/.gitrepo');
-                    $parts = explode("\n\t", $content);
-                    $matches = preg_grep('/^remote?/m', $parts);
-                    $key = Repository::getGithubKey(end($matches));
-                    $matches = preg_grep('/^branch?/m', $parts);
-                    $branch = explode(" ", end($matches));
-                    $branch = end($branch);
-                    $gitRepositoriesDirectories[$folder] = array('key' => $key, 'branch' => $branch);
-                }
-            }
-        }
-        $this->gitRepositoriesDirectories = $gitRepositoriesDirectories;
-    }
-
-
-    /**
-     * @param string $key
-     * @param string $recordId
-     * @param string $branch
-     * @return string
-     * @throws \Exception
-     * @throws \GuzzleHttp\Exception\GuzzleException
-     */
-    public function updateRepositoryDefaultBranchLatestCommit($key, $recordId, $branch = ''): string
-    {
-        list($branch, $commit) = $this->getRepositoryDefaultBranchLatestCommit($key, $branch);
-        $data[REDCap::getRecordIdField()] = $recordId;
-        $data['git_commit'] = $commit->sha;
-        $data['git_branch'] = $branch;
-        $data['date_of_latest_commit'] = $commit->commit->author->date;
-        $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($this->getFirstEventId());
-        $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
-        if (empty($response['errors'])) {
-            return $commit->sha;
-        } else {
-            throw new \Exception("cant update last commit for EM : " . $key);
-        }
-    }
-
-    /**
-     * @throws \GuzzleHttp\Exception\GuzzleException
-     */
-    public function generateREDCapBuildConfigCSV()
-    {
-        echo "HTTP_URL,DEST,BRANCH,COMMIT\n";
-        foreach ($this->getRedcapRepositories() as $recordId => $repository) {
-            $key = Repository::getGithubKey($repository[$this->getFirstEventId()]['git_url']);
-
-            foreach ($this->getGitRepositoriesDirectories() as $directory => $array) {
-                if ($array['key'] == $key) {
-
-                    if (!$repository[$this->getFirstEventId()]['git_commit']) {
-                        $commit = $this->updateRepositoryDefaultBranchLatestCommit($key, $recordId, $array['branch']);
-                    } else {
-                        $commit = $repository[$this->getFirstEventId()]['git_commit'];
-                    }
-                    // only write if branch and last commit different from what is saved in redcap.
-                    echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $directory . "," . $array['branch'] != $repository[$this->getFirstEventId()]['git_branch_default'] ? $array['branch'] : '' . "," . $commit != $repository[$this->getFirstEventId()]['git_commit'] ? $commit : '' . "\n";
-                    break;
-                }
-            }
-
-        }
-    }
-
     /**
      * @return array
      */
@@ -902,6 +890,84 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     public function setBranchesEventsMap(): void
     {
         $this->branchesEventsMap = $this->getSubSettings('branches-events-map', $this->getProjectId());;
+    }
+
+
+    /**
+     * @param string $key
+     * @param string $sha
+     * @return string
+     * @throws \Exception
+     */
+    public function getCommitBranch(string $key = '', string $sha = ''): string
+    {
+        if (!$this->commitBranch) {
+            $this->setCommitBranch($key, $sha);
+        }
+        return $this->commitBranch;
+    }
+
+    /**
+     * there are two ways to set the commit branch first via EM and commit sha. then call github to get the branches
+     * and compare latest sha for each branch. secondly you can set the branch directly this useful when generating
+     * config.csv and
+     * @param string $key
+     * @param string $sha
+     * @throws \Exception
+     */
+    public function setCommitBranch(string $key = '', string $sha = '', string $branch = ''): void
+    {
+        if ($branch == '') {
+            if (!$key || !$sha) {
+                throw new \Exception("data is missing branch with $key for sha: $sha");
+            }
+            $branches = $this->getRepositoryBranches($key);
+
+            foreach ($branches as $branch) {
+                if ($branch->commit->sha == $sha) {
+                    $this->commitBranch = $branch->name;
+                }
+            }
+
+            if (!$this->commitBranch) {
+                throw new \Exception("could not find branch with $key for sha: $sha");
+
+            }
+        } else {
+            $this->commitBranch = $branch;
+        }
+    }
+
+    /**
+     * @return int
+     */
+    public function getBranchEventId(): int
+    {
+        if (!$this->branchEventId) {
+            $this->setBranchEventId();
+        }
+        return $this->branchEventId;
+    }
+
+    /**
+     * @param int $branchEventId
+     */
+    public function setBranchEventId(string $branch = ''): void
+    {
+        if ($branch != '') {
+            // check if the branch one of the instances events
+            foreach ($this->getBranchesEventsMap() as $id => $item) {
+                // if not our branch is it misc branch to use it in case no event found
+                if ($branch == $item['branch-name']) {
+                    $this->branchEventId = $item['branch-event'];
+                }
+            }
+        }
+
+        // if no event is found this use the first event which represent default branch
+        if (!$this->branchEventId) {
+            $this->branchEventId = $this->getFirstEventId();
+        }
     }
 
 

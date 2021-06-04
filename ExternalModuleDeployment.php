@@ -147,6 +147,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 // for that event if branch was overridden. if not and default branch then deploy .
                 if ($repository[$eventId]['git_branch'] == '') {
                     // if no override then check if this commit for default branch and if so add it to array to be updated.
+                    // TODO do we want to save the default branch data in all enabled instances?
                     if ($defaultBranch) {
                         $result[] = $eventId;
                     }
@@ -184,7 +185,6 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         // Test master remove
         foreach ($this->getRedcapRepositories() as $recordId => $repository) {
             $key = Repository::getGithubKey($repository[$this->getFirstEventId()]['git_url']);
-            // TODO probably we can add another check for before commit and compare it with whatever in redcap
             if ($key == $payload['repository']['name']) {
                 if ($this->isPayloadBranchADefaultBranch($payload)) {
                     $eventId = $this->getFirstEventId();
@@ -199,11 +199,9 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 // now update each instance
                 foreach ($events as $event) {
                     if ($this->updateInstanceCommitInformation($event, $recordId, $payload)) {
-//                    if ($this->shouldTriggerTravisBuild($branch, $eventId)) {
-//                        // trigger Travis CI build to the commit branch. which
-//                        //$this->triggerTravisCIBuild($branch, $payload['after']);
-//                        $this->emLog('Travis should be triggered! for ' . $branch);
-//                    }
+                        // TODO should we trigger Travis? because the branch now custom for each EM and will not match redcap-build instance branch.
+                        // TODO if we decided to trigger Travis. solve the build commit currently its pull latest commit for DEFAULT branch.
+                        // TODO $this->triggerTravisCIBuild($branch)
                         $this->emLog("webhook triggered for EM $key last commit hash: " . $payload['after']);
                     } else {
                         // currently we are only logging to avoid breaking the loop.
@@ -229,16 +227,11 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         $data[REDCap::getRecordIdField()] = $recordId;
         $data['git_branch'] = $this->getCommitBranch($payload['repository']['name'], $payload['after']);;
         $data['git_commit'] = $payload['after'];
-        $data['date_of_latest_commit'] = $payload['commits'][0]['timestamp'];
+        $commit = end($payload['commits']);
+        $data['date_of_latest_commit'] = $commit['timestamp'];
         $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($eventId);
         $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
         if (empty($response['errors'])) {
-//                    if ($this->shouldTriggerTravisBuild($branch, $eventId)) {
-//                        // trigger Travis CI build to the commit branch. which
-//                        //$this->triggerTravisCIBuild($branch, $payload['after']);
-//                        $this->emLog('Travis should be triggered! for ' . $branch);
-//                    }
-
             return true;
         } else {
             throw new \Exception("cant update last commit for EM : " . $payload['repository']['name']);

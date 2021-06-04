@@ -5,8 +5,8 @@ namespace Stanford\ExternalModuleDeployment;
 
 
 try {
-    //test
-    //$module->verifyWebhookSecret();
+    //verify github secret.
+    $module->verifyWebhookSecret();
 
     // test commit to development
     if (isset($_POST) && !empty($_POST)) {

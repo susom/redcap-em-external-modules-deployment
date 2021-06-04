@@ -132,15 +132,47 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     /**
      * @param $repository
      * @return array
+     * @throws \Exception
      */
-    public function findCommitEventIds($repository): array
+    public function findCommitDeploymentEventIds($repository, $defaultBranch = false): array
     {
         $result = array();
+        $options = parseEnum($this->getProject()->metadata['deploy']['element_enum']);
         $deployments = $repository[$this->getFirstEventId()]['deploy'];
-        foreach ($deployments as $deployment) {
-            $result[] = $deployment;
+        foreach ($deployments as $name => $deployment) {
+            // check if EM is deployed on specific instance.
+            if ($deployment) {
+                // find the event id
+                $eventId = $this->searchEventViaDescription($options[$name]);
+                // for that event if branch was overridden. if not and default branch then deploy .
+                if ($repository[$eventId]['git_branch'] == '') {
+                    // if no override then check if this commit for default branch and if so add it to array to be updated.
+                    if ($defaultBranch) {
+                        $result[] = $eventId;
+                    }
+                    // if not check the the branch in the event is same as the commit branch if so add it.
+                } elseif ($repository[$eventId]['git_branch'] == $this->getCommitBranch()) {
+                    $result[] = $eventId;
+                }
+            }
         }
         return $result;
+    }
+
+    /**
+     * @param $description
+     * @return int|string
+     * @throws \Exception
+     */
+    private function searchEventViaDescription($description)
+    {
+        $arm = end($this->getProject()->events);
+        foreach ($arm['events'] as $id => $event) {
+            if ($event['descrip'] == $description) {
+                return $id;
+            }
+        }
+        throw new \Exception("could not find event for $description");
     }
 
     /**
@@ -156,21 +188,30 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             if ($key == $payload['repository']['name']) {
                 if ($this->isPayloadBranchADefaultBranch($payload)) {
                     $eventId = $this->getFirstEventId();
+                    // first update the first event instance
+                    $this->updateInstanceCommitInformation($eventId, $recordId, $payload);
+                    // next find other instances for deployment.
+                    $events = $this->findCommitDeploymentEventIds($repository, true);
                 } else {
-                    $events = $this->findCommitEventIds($repository);
+                    $events = $this->findCommitDeploymentEventIds($repository);
                 }
 
-                if ($this->updateInstanceCommitInformation($eventId, $recordId, $payload)) {
+                // now update each instance
+                foreach ($events as $event) {
+                    if ($this->updateInstanceCommitInformation($event, $recordId, $payload)) {
 //                    if ($this->shouldTriggerTravisBuild($branch, $eventId)) {
 //                        // trigger Travis CI build to the commit branch. which
 //                        //$this->triggerTravisCIBuild($branch, $payload['after']);
 //                        $this->emLog('Travis should be triggered! for ' . $branch);
 //                    }
-                    $this->emLog("webhook triggered for EM $key last commit hash: " . $payload['after']);
-                    die();
-                } else {
-                    throw new \Exception("cant update last commit for EM : " . $repository[$this->getFirstEventId()]['module_name']);
+                        $this->emLog("webhook triggered for EM $key last commit hash: " . $payload['after']);
+                    } else {
+                        // currently we are only logging to avoid breaking the loop.
+                        $this->emError("could not update EM $key in event " . $event);
+                    }
                 }
+                // no need to go over other EM
+                break;
             }
         }
     }
@@ -200,7 +241,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
             return true;
         } else {
-            throw new \Exception("cant update last commit for EM : " . $repository[$this->getFirstEventId()]['module_name']);
+            throw new \Exception("cant update last commit for EM : " . $payload['repository']['name']);
         }
     }
 

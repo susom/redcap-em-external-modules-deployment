@@ -33,7 +33,6 @@ use GuzzleHttp\Client;
  * @property string $defaultREDCapBuildRepoBranch
  * @property string $ShaForLatestDefaultBranchCommitForREDCapBuild
  * @property array $gitRepositoriesDirectories
- * @property array $branchesEventsMap
  * @property string $commitBranch
  * @property int $branchEventId
  */
@@ -68,7 +67,6 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
     private $gitRepositoriesDirectories;
 
-    private $branchesEventsMap;
 
     private $commitBranch;
 
@@ -99,7 +97,6 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             // initiate guzzle client to get access token
             $this->setGuzzleClient(new Client());
 
-            $this->setBranchesEventsMap();
             //authenticate github client
             // no longer needed we will do all calls manually package is not fully functional
             //$this->getClient()->authenticate($this->getAccessToken(), null, \Github\Client::AUTH_ACCESS_TOKEN);
@@ -110,14 +107,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         }
     }
 
-
-
-    /**
-     * @param $payload
-     * @return array
-     * @throws \Exception
-     */
-    private function determineEventIdWhereCommitToBeSaved($payload): array
+    public function isPayloadBranchADefaultBranch($payload): bool
     {
         // get default branch
         $defaultBranch = $payload['repository']['default_branch'];
@@ -126,55 +116,31 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
         // if commit branch is same as default then save to first event id
         if ($commitBranch == $defaultBranch) {
-            return array($this->getFirstEventId(), $defaultBranch);
+            return true;
+        }
+        return false;
+    }
+
+    public function determineCommitBranch($repository, $payload)
+    {
+        if ($this->isPayloadBranchADefaultBranch($payload)) {
+            return $this->getFirstEventId();
         }
 
-        $miscBranchEventId = '';
-        // check if the branch one of the instances events
-        foreach ($this->getBranchesEventsMap() as $id => $item) {
-            // if not our branch is it misc branch to use it in case no event found
-            if ($commitBranch == $item['branch-name']) {
-                return array($item['branch-event'], $commitBranch);
-            }
-        }
-
-        $arms = $this->getProject()->events;// !!!!
-        foreach ($arms as $arm) {
-            $events = $arm->events;
-            foreach ($events as $id => $event) {
-                // if not our branch is it misc branch to use it in case no event found
-                if ($event['descrip'] == 'misc') {
-                    $miscBranchEventId = $id;
-                }
-            }
-        }
-        //we could not find misc or corresponding event
-        if ($miscBranchEventId == '') {
-            throw new \Exception("no event found for this commit. please check you event structure");
-        }
-        return array($miscBranchEventId, $commitBranch);
     }
 
     /**
-     * @param $branch
-     * @param $eventId
-     * @return bool
+     * @param $repository
+     * @return array
      */
-    public function shouldTriggerTravisBuild($branch, $eventId): bool
+    public function findCommitEventIds($repository): array
     {
-        // if first event then its for default instances
-        if ($eventId == $this->getFirstEventId()) {
-            return true;
+        $result = array();
+        $deployments = $repository[$this->getFirstEventId()]['deploy'];
+        foreach ($deployments as $deployment) {
+            $result[] = $deployment;
         }
-
-        // check if the branch is mapped to an event which mean this branch represent instance.
-        foreach ($this->getBranchesEventsMap() as $id => $item) {
-            if ($branch == $item['branch-name']) {
-                return true;
-            }
-        }
-
-        return false;
+        return $result;
     }
 
     /**
@@ -188,25 +154,53 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             $key = Repository::getGithubKey($repository[$this->getFirstEventId()]['git_url']);
             // TODO probably we can add another check for before commit and compare it with whatever in redcap
             if ($key == $payload['repository']['name']) {
-                list($eventId, $branch) = $this->determineEventIdWhereCommitToBeSaved($payload);
-                $data[REDCap::getRecordIdField()] = $recordId;
-                $data['git_branch'] = $branch;
-                $data['git_commit'] = $payload['after'];
-                $data['date_of_latest_commit'] = $payload['commits'][0]['timestamp'];
-                $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($eventId);
-                $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
-                if (empty($response['errors'])) {
-                    if ($this->shouldTriggerTravisBuild($branch, $eventId)) {
-                        // trigger Travis CI build to the commit branch. which
-                        //$this->triggerTravisCIBuild($branch, $payload['after']);
-                        $this->emLog('Travis should be triggered! for ' . $branch);
-                    }
+                if ($this->isPayloadBranchADefaultBranch($payload)) {
+                    $eventId = $this->getFirstEventId();
+                } else {
+                    $events = $this->findCommitEventIds($repository);
+                }
+
+                if ($this->updateInstanceCommitInformation($eventId, $recordId, $payload)) {
+//                    if ($this->shouldTriggerTravisBuild($branch, $eventId)) {
+//                        // trigger Travis CI build to the commit branch. which
+//                        //$this->triggerTravisCIBuild($branch, $payload['after']);
+//                        $this->emLog('Travis should be triggered! for ' . $branch);
+//                    }
                     $this->emLog("webhook triggered for EM $key last commit hash: " . $payload['after']);
                     die();
                 } else {
                     throw new \Exception("cant update last commit for EM : " . $repository[$this->getFirstEventId()]['module_name']);
                 }
             }
+        }
+    }
+
+
+    /**
+     * @param $eventId
+     * @param $recordId
+     * @param $payload
+     * @return bool
+     * @throws \Exception
+     */
+    public function updateInstanceCommitInformation($eventId, $recordId, $payload): bool
+    {
+        $data[REDCap::getRecordIdField()] = $recordId;
+        $data['git_branch'] = $this->getCommitBranch($payload['repository']['name'], $payload['after']);;
+        $data['git_commit'] = $payload['after'];
+        $data['date_of_latest_commit'] = $payload['commits'][0]['timestamp'];
+        $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($eventId);
+        $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
+        if (empty($response['errors'])) {
+//                    if ($this->shouldTriggerTravisBuild($branch, $eventId)) {
+//                        // trigger Travis CI build to the commit branch. which
+//                        //$this->triggerTravisCIBuild($branch, $payload['after']);
+//                        $this->emLog('Travis should be triggered! for ' . $branch);
+//                    }
+
+            return true;
+        } else {
+            throw new \Exception("cant update last commit for EM : " . $repository[$this->getFirstEventId()]['module_name']);
         }
     }
 
@@ -875,23 +869,6 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         }
 
     }
-
-    /**
-     * @return array
-     */
-    public function getBranchesEventsMap(): array
-    {
-        return $this->branchesEventsMap;
-    }
-
-    /**
-     * @param array $branchesEventsMap
-     */
-    public function setBranchesEventsMap(): void
-    {
-        $this->branchesEventsMap = $this->getSubSettings('branches-events-map', $this->getProjectId());;
-    }
-
 
     /**
      * @param string $key

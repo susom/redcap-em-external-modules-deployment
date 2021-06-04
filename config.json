@@ -80,27 +80,6 @@
             "type": "text"
         },
         {
-            "key": "branches-events-map",
-            "name": "<b>Configure Branches Events Map</b><div class='alert alert-danger'>DO NOT CONFIGURE INSTANCE FOR DEFAULT EVENT.</div>",
-            "required": true,
-            "type": "sub_settings",
-            "repeatable": true,
-            "sub_settings": [
-                {
-                    "key": "branch-name",
-                    "name": "Add Branch name.<b>",
-                    "required": true,
-                    "type": "text"
-                },
-                {
-                    "key": "branch-event",
-                    "name": "Select branch corresponding event.<b>",
-                    "required": true,
-                    "type": "event-list"
-                }
-            ]
-        },
-        {
             "key": "enable-project-debug-logging",
             "name": "<b>Enable Debug Logging</b><br><i>(optional)</i> Requires installation and configuration of emLogger",
             "required": false,

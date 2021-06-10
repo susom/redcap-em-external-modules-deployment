@@ -8,7 +8,10 @@ try {
     //verify github secret.
     $module->verifyWebhookSecret();
 
-    if (isset($_POST) && !empty($_POST)) {
+
+    $input = trim(file_get_contents('php://input'));
+    $data = json_decode($input, true);
+    if (!empty($data)) {
         $payload = json_decode($_POST['payload'], true);
         $module->updateREDCapRepositoryWithLastCommit($payload);
 

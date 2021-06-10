@@ -967,12 +967,25 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     {
         if ($branch != '') {
             // check if the branch one of the instances events
-            foreach ($this->getBranchesEventsMap() as $id => $item) {
-                // if not our branch is it misc branch to use it in case no event found
-                if ($branch == $item['branch-name']) {
-                    $this->branchEventId = $item['branch-event'];
+//            foreach ($this->getBranchesEventsMap() as $id => $item) {
+//                // if not our branch is it misc branch to use it in case no event found
+//                if ($branch == $item['branch-name']) {
+//                    $this->branchEventId = $item['branch-event'];
+//                }
+//            }
+
+            $options = parseEnum($this->getProject()->metadata['deploy']['element_enum']);
+            foreach ($options as $name => $deployment) {
+                // check if EM is deployed on specific instance.
+                if ($deployment) {
+                    // find the event id
+                    if ($name == $branch) {
+                        $this->branchEventId = $this->searchEventViaDescription($deployment);
+                        break;
+                    }
                 }
             }
+
         }
 
         // if no event is found this use the first event which represent default branch

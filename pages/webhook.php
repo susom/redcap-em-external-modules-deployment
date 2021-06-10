@@ -17,7 +17,7 @@ try {
 //        $payload = json_decode($data, true);
         $module->updateREDCapRepositoryWithLastCommit($data);
 
-        echo json_encode(array('status' => 'success', 'message' => $payload['repository']['name'] . " branch " . $module->getCommitBranch() . " was updated"));
+        echo json_encode(array('status' => 'success', 'message' => $data['repository']['name'] . " branch " . $module->getCommitBranch() . " was updated"));
     } else {
         throw new \Exception("No post information found");
     }

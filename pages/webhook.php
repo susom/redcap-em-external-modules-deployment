@@ -8,10 +8,15 @@ try {
     //verify github secret.
     $module->verifyWebhookSecret();
 
+
     // test commit to development
     if (isset($_POST) && !empty($_POST)) {
         $payload = json_decode($_POST['payload'], true);
         $module->updateREDCapRepositoryWithLastCommit($payload);
+
+        $module->emLog("Payload");
+        $module->emLog($payload);
+
         echo json_encode(array('status' => 'success', 'message' => $payload['repository']['name'] . " branch " . $module->getCommitBranch() . " was updated"));
     } else {
         throw new \Exception("something went wrong!");

@@ -517,6 +517,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
             foreach ($this->getGitRepositoriesDirectories() as $directory => $array) {
                 if ($array['key'] == $key) {
+
                     $events = $this->findCommitDeploymentEventIds($repository, true);
 
                     if (!in_array($this->getBranchEventId(), $events)) {

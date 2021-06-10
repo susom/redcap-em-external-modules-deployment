@@ -14,12 +14,9 @@ try {
         $payload = json_decode($_POST['payload'], true);
         $module->updateREDCapRepositoryWithLastCommit($payload);
 
-        $module->emLog("Payload");
-        $module->emLog($payload);
-
         echo json_encode(array('status' => 'success', 'message' => $payload['repository']['name'] . " branch " . $module->getCommitBranch() . " was updated"));
     } else {
-        throw new \Exception("something went wrong!");
+        throw new \Exception("No post information found");
     }
 } catch (\Exception $e) {
     $module->emError($e->getMessage());

@@ -228,12 +228,13 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         $data['git_branch'] = $this->getCommitBranch($payload['repository']['name'], $payload['after']);;
         $data['git_commit'] = $payload['after'];
         $commit = end($payload['commits']);
-        $data['date_of_latest_commit'] = $commit['timestamp'];
+        $data['date_of_latest_commit_override'] = $commit['timestamp'];
         $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($eventId);
         $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
         if (empty($response['errors'])) {
             return true;
         } else {
+            $this->emError($response);
             throw new \Exception("cant update last commit for EM : " . $payload['repository']['name']);
         }
     }

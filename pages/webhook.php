@@ -11,6 +11,7 @@ try {
 
     $input = trim(file_get_contents('php://input'));
     $data = json_decode($input, true);
+    $module->emLog($data);
     if (!empty($data)) {
         $payload = json_decode($_POST['payload'], true);
         $module->updateREDCapRepositoryWithLastCommit($payload);

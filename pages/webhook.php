@@ -14,8 +14,8 @@ try {
     $module->emLog($data);
     // test commit
     if (!empty($data)) {
-        $payload = json_decode($data, true);
-        $module->updateREDCapRepositoryWithLastCommit($payload);
+//        $payload = json_decode($data, true);
+        $module->updateREDCapRepositoryWithLastCommit($data);
 
         echo json_encode(array('status' => 'success', 'message' => $payload['repository']['name'] . " branch " . $module->getCommitBranch() . " was updated"));
     } else {

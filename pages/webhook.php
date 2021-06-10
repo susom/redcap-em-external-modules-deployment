@@ -9,7 +9,6 @@ try {
     $module->verifyWebhookSecret();
 
     $module->emLog($_POST);
-    // test commit to development
     if (isset($_POST) && !empty($_POST)) {
         $payload = json_decode($_POST['payload'], true);
         $module->updateREDCapRepositoryWithLastCommit($payload);

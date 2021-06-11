@@ -6,13 +6,12 @@ namespace Stanford\ExternalModuleDeployment;
 
 try {
     //verify github secret.
-    //$module->verifyWebhookSecret();
+    $module->verifyWebhookSecret();
 
 
     $input = trim(file_get_contents('php://input'));
-    $input = $_POST['payload'];
     $data = json_decode($input, true);
-    // test
+    // test commit
     if (!empty($data)) {
         $module->emLog($data['repository']['name']);
 //        $payload = json_decode($data, true);

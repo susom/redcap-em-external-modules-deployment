@@ -11,8 +11,6 @@ try {
 
     $input = trim(file_get_contents('php://input'));
     $data = json_decode($input, true);
-    $module->emLog($input);
-    $module->emLog($data);
     // test
     if (!empty($data)) {
         $module->emLog($data['repository']['name']);

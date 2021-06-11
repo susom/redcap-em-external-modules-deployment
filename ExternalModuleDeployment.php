@@ -183,13 +183,17 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         // Test master remove
         foreach ($this->getRedcapRepositories() as $recordId => $repository) {
             $key = Repository::getGithubKey($repository[$this->getFirstEventId()]['git_url']);
+            $this->emLog($key);
             if ($key == $payload['repository']['name']) {
+                $this->emLog("====================================");
                 if ($this->isPayloadBranchADefaultBranch($payload)) {
                     $eventId = $this->getFirstEventId();
+                    $this->emLog("Event Id:", $eventId);
                     // first update the first event instance
                     $this->updateInstanceCommitInformation($eventId, $recordId, $payload);
                     // next find other instances for deployment.
                     $events = $this->findCommitDeploymentEventIds($repository, true);
+                    $this->emLog($events);
                 } else {
                     $events = $this->findCommitDeploymentEventIds($repository);
                 }

@@ -6,7 +6,6 @@ namespace Stanford\ExternalModuleDeployment;
 
 try {
 //$repos = $module->getClient()->api('current_user')->repositories();
-// test
     if (isset($_POST['repo']) && isset($_POST['command'])) {
         $module->testGithub(filter_var($_POST['repo'], FILTER_SANITIZE_STRING), filter_var($_POST['command'], FILTER_SANITIZE_STRING));
     }

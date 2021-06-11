@@ -9,9 +9,9 @@ try {
     $module->verifyWebhookSecret();
 
 
-    $input = trim(file_get_contents('php://input'));
-    $data = json_decode($input, true);
-    $module->emLog($input);
+    $data = trim(file_get_contents('php://input'));
+//    $data = json_decode($input, true);
+    $module->emLog($data);
     if (!empty($data)) {
         $module->emLog($data['repository']['name']);
 //        $payload = json_decode($data, true);

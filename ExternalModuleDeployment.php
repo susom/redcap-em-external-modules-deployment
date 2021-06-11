@@ -7,15 +7,16 @@ require_once __DIR__ . '/vendor/autoload.php';
 require_once "emLoggerTrait.php";
 require_once "classes/User.php";
 require_once "classes/Repository.php";
+require_once "classes/Client.php";
 
 use ExternalModules\ExternalModules;
 use Stanford\ExternalModuleDeployment\User;
 use Stanford\ExternalModuleDeployment\Repository;
+use Stanford\ExternalModuleDeployment\Client;
 use REDCap;
 use Project;
 use \Firebase\JWT\JWT;
-use GuzzleHttp\Exception\ClientException;
-use GuzzleHttp\Client;
+
 
 /**
  * Class ExternalModuleDeployment
@@ -23,6 +24,7 @@ use GuzzleHttp\Client;
  * @property string $pta
  * @property User $user
  * @property Repository $repository
+ * @property Client $client
  * @property array $repositories
  * @property Project $project
  * @property string $jwt
@@ -72,6 +74,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
     private $branchEventId;
 
+    private $client;
     public function __construct()
     {
         parent::__construct();
@@ -90,10 +93,15 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
             }
 
+            // initiate guzzle client to get access token
+            $this->setClient(new Client($this->getProjectSetting('github-installation-id'), $this->getProjectSetting('github-app-private-key')));
+
             // set repositories
             $this->setRepositories();
-            // initiate guzzle client to get access token
-            $this->setGuzzleClient(new Client());
+
+
+            // set repository as adapter for all github requests.
+            $this->setRepository(new Repository($this->getClient()));
 
             //authenticate github client
             // no longer needed we will do all calls manually package is not fully functional
@@ -117,6 +125,55 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             return true;
         }
         return false;
+    }
+
+    /**
+     * @param int $project_id
+     * @param string|null $record
+     * @param string $instrument
+     * @param int $event_id
+     * @param int|null $group_id
+     * @param string|null $survey_hash
+     * @param int|null $response_id
+     * @param int $repeat_instance
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     * @throws \Exception
+     */
+    public function redcap_save_record(int $project_id, string $record = NULL, string $instrument, int $event_id, int $group_id = NULL, string $survey_hash = NULL, int $response_id = NULL, int $repeat_instance = 1)
+    {
+        $param = array(
+            'project_id' => $project_id,
+            'return_format' => 'array',
+            'events' => $event_id,
+            'records' => [$record]
+        );
+        $data = REDCap::getData($param);
+        $this->setRepository(new Repository($this->getClient(), $data));
+        $key = Repository::getGithubKey($data[$record][$event_id]['git_url']);
+        list($commitBranch, $commit) = $this->getRepositoryDefaultBranchLatestCommit($key);
+
+        if ($event_id == $this->getFirstEventId()) {
+            $events = $this->findCommitDeploymentEventIds($data[$record], true);
+
+            foreach ($events as $branch => $event) {
+                if ($this->updateInstanceCommitInformation($event, $record, $key, $commit->sha, $commit->commit->author->date, $commitBranch)) {
+                    // TODO if we decided to trigger Travis. solve the build commit currently its pull latest commit for DEFAULT branch.
+                    //$this->triggerTravisCIBuild($branch);
+                    $this->emLog("webhook triggered for EM $key last commit hash: " . $commit->sha);
+                } else {
+                    // currently we are only logging to avoid breaking the loop.
+                    $this->emError("could not update EM $key in event " . $event);
+                }
+            }
+
+        }
+
+        if (empty($response['errors'])) {
+            return true;
+        } else {
+            $this->emError($response);
+            throw new \Exception("cant update last commit for EM : " . $key);
+        }
     }
 
     public function determineCommitBranch($repository, $payload)
@@ -150,7 +207,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                         $result[$name] = $eventId;
                     }
                     // if not check the the branch in the event is same as the commit branch if so add it.
-                } elseif ($repository[$eventId]['git_branch'] == $this->getCommitBranch()) {
+                } elseif ($repository[$eventId]['git_branch'] == $this->getCommitBranch() || $defaultBranch) {
                     $result[$name] = $eventId;
                 }
             }
@@ -198,8 +255,9 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 }
 
                 // now update each instance
+                 $commit = end($payload['commits']);
                  foreach ($events as $branch => $event) {
-                     if ($this->updateInstanceCommitInformation($event, $recordId, $payload)) {
+                     if ($this->updateInstanceCommitInformation($event, $recordId, $payload['repository']['name'], $payload['after'], $commit['timestamp'])) {
                          // TODO if we decided to trigger Travis. solve the build commit currently its pull latest commit for DEFAULT branch.
                          $this->triggerTravisCIBuild($branch);
                          $this->emLog("webhook triggered for EM $key last commit hash: " . $payload['after']);
@@ -222,20 +280,24 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
      * @return bool
      * @throws \Exception
      */
-    public function updateInstanceCommitInformation($eventId, $recordId, $payload): bool
+    public function updateInstanceCommitInformation($eventId, $recordId, $name, $after, $timestamp, $branch = ''): bool
     {
         $data[REDCap::getRecordIdField()] = $recordId;
-        $data['git_branch'] = $this->getCommitBranch($payload['repository']['name'], $payload['after']);;
-        $data['git_commit'] = $payload['after'];
-        $commit = end($payload['commits']);
-        $data['date_of_latest_commit'] = $commit['timestamp'];
+        if ($branch == '') {
+            $data['git_branch'] = $this->getCommitBranch($name, $after);;
+        } else {
+            $data['git_branch'] = $branch;
+        }
+
+        $data['git_commit'] = $after;
+        $data['date_of_latest_commit'] = $timestamp;
         $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($eventId);
         $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
         if (empty($response['errors'])) {
             return true;
         } else {
             $this->emError($response);
-            throw new \Exception("cant update last commit for EM : " . $payload['repository']['name']);
+            throw new \Exception("cant update last commit for EM : " . $name);
         }
     }
 
@@ -272,57 +334,6 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     }
 
     /**
-     * @param $key
-     * @return mixed
-     * @throws \GuzzleHttp\Exception\GuzzleException
-     */
-    public function getRepositoryDefaultBranch($key)
-    {
-        $response = $this->getGuzzleClient()->get('https://api.github.com/repos/susom/' . $key, [
-            'headers' => [
-                'Authorization' => 'token ' . $this->getAccessToken(),
-                'Accept' => 'application/vnd.github.v3+json'
-            ]
-        ]);
-        $repo = json_decode($response->getBody());
-        return $repo->default_branch;
-    }
-
-    public function getRepositoryBranches($key)
-    {
-        if (!$key) {
-            throw new \Exception("data is missing $key");
-        }
-        $commits = $this->getGuzzleClient()->get('https://api.github.com/repos/susom/' . $key . '/branches', [
-            'headers' => [
-                'Authorization' => 'token ' . $this->getAccessToken(),
-                'Accept' => 'application/vnd.github.v3+json'
-            ]
-        ]);
-        return json_decode($commits->getBody());
-    }
-
-    /**
-     * @param $key
-     * @param $branch
-     * @return mixed
-     * @throws \GuzzleHttp\Exception\GuzzleException
-     */
-    public function getRepositoryBranchCommits($key, $branch)
-    {
-        if (!$key || !$branch) {
-            throw new \Exception("data is missing repo with $key for branch: $branch");
-        }
-        $commits = $this->getGuzzleClient()->get('https://api.github.com/repos/susom/' . $key . '/commits/' . $branch, [
-            'headers' => [
-                'Authorization' => 'token ' . $this->getAccessToken(),
-                'Accept' => 'application/vnd.github.v3+json'
-            ]
-        ]);
-        return json_decode($commits->getBody());
-    }
-
-    /**
      * @param string $key
      * @param string $branch
      * @return array
@@ -334,12 +345,11 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
             // get default branch
             if ($branch == '') {
-                $branch = $this->getRepositoryDefaultBranch($key);
+                $branch = $this->getRepository()->getRepositoryDefaultBranch($key);
             }
 
-
             // get latest commit for default branch
-            $commit = $this->getRepositoryBranchCommits($key, $branch);
+            $commit = $this->getRepository()->getRepositoryBranchCommits($key, $branch);
             //return first commit in the array which is the last one.
             return array($branch, $commit);
         } catch (\GuzzleHttp\Exception\RequestException $e) {
@@ -411,7 +421,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
     public function testGithub($key, $command = '')
     {
-        $response = $this->getGuzzleClient()->get('https://api.github.com/repos/susom/' . $key . ($command ? '/' . $command : ''), [
+        $response = $this->getClient()->get('https://api.github.com/repos/susom/' . $key . ($command ? '/' . $command : ''), [
             'headers' => [
                 'Authorization' => 'token ' . $this->getAccessToken(),
                 'Accept' => 'application/vnd.github.v3+json'
@@ -516,55 +526,24 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         foreach ($this->getRedcapRepositories() as $recordId => $repository) {
             $key = Repository::getGithubKey($repository[$this->getFirstEventId()]['git_url']);
 
-            foreach ($this->getGitRepositoriesDirectories() as $directory => $array) {
-                if ($array['key'] == $key) {
+//            foreach ($this->getGitRepositoriesDirectories() as $directory => $array) {
+//                if ($array['key'] == $key) {
 
-                    $events = $this->findCommitDeploymentEventIds($repository, true);
+            $events = $this->findCommitDeploymentEventIds($repository, true);
 
-                    if (!in_array($this->getBranchEventId(), $events)) {
-                        continue;
-                    }
-
-                    if ($repository[$this->getBranchEventId()]['git_commit']) {
-                        $commit = $repository[$this->getBranchEventId()]['git_commit'];
-                    }
-                    // only write if branch and last commit different from what is saved in redcap.
-                    echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $directory . "," . ($this->getCommitBranch('', '') != $repository[$this->getFirstEventId()]['git_branch'] ? $this->getCommitBranch('', '') : '') . "," . ($commit != $repository[$this->getFirstEventId()]['git_commit'] ? $commit : '') . "\n";
-                    break;
-                }
+            if (!in_array($this->getBranchEventId(), $events)) {
+                continue;
             }
 
+            if ($repository[$this->getBranchEventId()]['git_commit']) {
+                $commit = $repository[$this->getBranchEventId()]['git_commit'];
+            }
+            // only write if branch and last commit different from what is saved in redcap.
+            echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $recordId . "_v9.9.9," . ($this->getCommitBranch('', '') != $repository[$this->getFirstEventId()]['git_branch'] ? $this->getCommitBranch('', '') : '') . "," . ($commit != $repository[$this->getFirstEventId()]['git_commit'] ? $commit : '') . "\n";
+//                }
+//            }
+
         }
-    }
-
-
-    public function getExternalModuleUsage()
-    {
-
-
-        $q = $this->query("select
-                rems.external_module_id,
-                rem.directory_prefix,
-                rems.project_id,
-                rp.app_title,
-                rp.status,
-                rrc.record_count,
-                sum(case when rems.`key` = 'enabled' and rems.value = 'true' then 1 else 0 end) as is_enabled,
-                count(*) as settings
-            from redcap_external_module_settings rems
-            join redcap_external_modules rem on rems.external_module_id = rem.external_module_id
-            join redcap_projects rp on rems.project_id = rp.project_id
-            join redcap_record_counts rrc on rp.project_id = rrc.project_id
-            where rems.project_id is not null
-            group by rems.external_module_id, rems.project_id, rem.directory_prefix, rp.app_title, rp.status, rrc.record_count", []
-        );
-
-        $resultsByModule = [];
-        $resultsByProject = [];
-        while ($row = db_fetch_assoc($q)) {
-            $results[] = $row;
-        }
-
     }
 
     /**
@@ -655,7 +634,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         $resultsByProject = [];
         $repositories = [];
         while ($row = db_fetch_assoc($q)) {
-            $repositories[] = new Repository($row);
+            $repositories[] = new Repository($this->getClient(), $row);
         }
         $this->repositories = $repositories;
     }
@@ -676,63 +655,65 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         $this->project = $project;
     }
 
-    /**
-     * @return string
-     */
-    public function getJwt(): string
-    {
-        if ($this->jwt) {
-            return $this->jwt;
-        } else {
-            $this->setJwt();
-            return $this->jwt;
-        }
+//    /**
+//     * @return string
+//     */
+//    public function getJwt(): string
+//    {
+//        if ($this->jwt) {
+//            return $this->jwt;
+//        } else {
+//            $this->setJwt();
+//            return $this->jwt;
+//        }
+//
+//    }
+//
+//    /**
+//     * @param string $jwt
+//     */
+//    public function setJwt(): void
+//    {
+//        $payload = array(
+//            "iss" => "108296",
+//            "iat" => time() - 60,
+//            "exp" => time() + 360
+//        );
+//        $privateKey = $this->getProjectSetting('github-app-private-key');
+//        $jwt = JWT::encode($payload, $privateKey, 'RS256');
+//        $this->jwt = $jwt;
+//    }
 
-    }
 
-    /**
-     * @param string $jwt
-     */
-    public function setJwt(): void
-    {
-        $payload = array(
-            "iss" => "108296",
-            "iat" => time() - 60,
-            "exp" => time() + 360
-        );
-        $privateKey = $this->getProjectSetting('github-app-private-key');
-        $jwt = JWT::encode($payload, $privateKey, 'RS256');
-        $this->jwt = $jwt;
-    }
-
-    /**
-     * @return string
-     */
-    public function getAccessToken(): string
-    {
-        if ($this->accessToken) {
-            return $this->accessToken;
-        } else {
-            $this->setAccessToken();
-            return $this->accessToken;
-        }
-
-    }
-
-    /**
-     * @param string $accessToken
-     */
-    public function setAccessToken(): void
-    {
-        $response = $this->getGuzzleClient()->post('https://api.github.com/app/installations/' . $this->getProjectSetting('github-installation-id') . '/access_tokens', [
-            'headers' => [
-                'Authorization' => 'Bearer ' . $this->getJwt(),
-                'Accept' => 'application/vnd.github.v3+json'
-            ]
-        ]);
-        $body = json_decode($response->getBody());
-        $this->accessToken = $body->token;
-    }
+    //TODO all Github related stuff moved to Client class. we need to remove all below data.
+//    /**
+//     * @return string
+//     */
+//    public function getAccessToken(): string
+//    {
+//        if ($this->accessToken) {
+//            return $this->accessToken;
+//        } else {
+//            $this->setAccessToken();
+//            return $this->accessToken;
+//        }
+//
+//    }
+//
+//    /**
+//     * @param string $accessToken
+//     */
+//    public function setAccessToken(): void
+//    {
+//        $response = $this->getGuzzleClient()->post('https://api.github.com/app/installations/' . $this->getProjectSetting('github-installation-id') . '/access_tokens', [
+//            'headers' => [
+//                'Authorization' => 'Bearer ' . $this->getJwt(),
+//                'Accept' => 'application/vnd.github.v3+json'
+//            ]
+//        ]);
+//        $body = json_decode($response->getBody());
+//        $this->accessToken = $body->token;
+//    }
 
     /**
      * @return \GuzzleHttp\Client
@@ -794,19 +775,13 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
     /**
      * @param \stdClass $redcapBuildRepoObject
+     * @throws \GuzzleHttp\Exception\GuzzleException
      */
     public function setRedcapBuildRepoObject(): void
     {
         $key = Repository::getGithubKey($this->getProjectSetting('redcap-build-github-repo'));
 
-        $response = $this->getGuzzleClient()->get('https://api.github.com/repos/susom/' . $key, [
-            'headers' => [
-                'Authorization' => 'token ' . $this->getAccessToken(),
-                'Accept' => 'application/vnd.github.v3+json'
-            ]
-        ]);
-        $body = json_decode($response->getBody());
-        $this->redcapBuildRepoObject = $body;
+        $this->redcapBuildRepoObject = $this->getRepository()->getRepositoryBody($key);
     }
 
 
@@ -815,7 +790,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
      */
     public function triggerTravisCIBuild($branch)
     {
-        $response = $this->getGuzzleClient()->post('https://api.travis-ci.com/repo/susom%2Fredcap-build/requests', [
+        $response = $this->getClient()->getGuzzleClient()->post('https://api.travis-ci.com/repo/susom%2Fredcap-build/requests', [
             'headers' => [
                 'Authorization' => 'token ' . $this->getProjectSetting('travis-ci-api-token'),
                 'Accept' => 'application/json',
@@ -889,13 +864,8 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     {
         $key = Repository::getGithubKey($this->getProjectSetting('redcap-build-github-repo'));
 
-        $response = $this->getGuzzleClient()->get('https://api.github.com/repos/susom/' . $key . '/commits/' . ($branch != '' ? $branch : $this->getDefaultREDCapBuildRepoBranch()), [
-            'headers' => [
-                'Authorization' => 'token ' . $this->getAccessToken(),
-                'Accept' => 'application/vnd.github.v3+json'
-            ]
-        ]);
-        return json_decode($response->getBody());
+        return $this->getRepository()->getLatestCommitForBranchForREDCapBuild($key, ($branch != '' ? $branch : $this->getDefaultREDCapBuildRepoBranch()));
+
     }
 
     /**
@@ -940,7 +910,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             if (!$key || !$sha) {
                 throw new \Exception("data is missing branch with $key for sha: $sha");
             }
-            $branches = $this->getRepositoryBranches($key);
+            $branches = $this->getRepository()->getRepositoryBranches($key);
 
             foreach ($branches as $branch) {
                 if ($branch->commit->sha == $sha) {
@@ -1000,6 +970,22 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         if (!$this->branchEventId) {
             $this->branchEventId = $this->getFirstEventId();
         }
+    }
+
+    /**
+     * @return \Stanford\ExternalModuleDeployment\Client
+     */
+    public function getClient(): \Stanford\ExternalModuleDeployment\Client
+    {
+        return $this->client;
+    }
+
+    /**
+     * @param \Stanford\ExternalModuleDeployment\Client $client
+     */
+    public function setClient(\Stanford\ExternalModuleDeployment\Client $client): void
+    {
+        $this->client = $client;
     }
 
 

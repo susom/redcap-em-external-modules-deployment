@@ -189,7 +189,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                      $eventId = $this->getFirstEventId();
                      $this->emLog("Event Id:", $eventId);
                      // first update the first event instance
-                     $this->updateInstanceCommitInformation($eventId, $recordId, $payload);
+                     //$this->updateInstanceCommitInformation($eventId, $recordId, $payload);
                      // next find other instances for deployment.
                      $events = $this->findCommitDeploymentEventIds($repository, true);
                      $this->emLog($events);

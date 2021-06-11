@@ -31,7 +31,7 @@ use GuzzleHttp\Client;
  * @property array $redcapRepositories
  * @property \stdClass $redcapBuildRepoObject
  * @property string $defaultREDCapBuildRepoBranch
- * @property string $ShaForLatestDefaultBranchCommitForREDCapBuild
+ * @property string $ShaForBranchCommitForREDCapBuild
  * @property array $gitRepositoriesDirectories
  * @property string $commitBranch
  * @property int $branchEventId
@@ -63,7 +63,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
     private $defaultREDCapBuildRepoBranch;
 
-    private $ShaForLatestDefaultBranchCommitForREDCapBuild;
+    private $ShaForBranchCommitForREDCapBuild;
 
     private $gitRepositoriesDirectories;
 
@@ -147,11 +147,11 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                     // if no override then check if this commit for default branch and if so add it to array to be updated.
                     // TODO do we want to save the default branch data in all enabled instances?
                     if ($defaultBranch) {
-                        $result[] = $eventId;
+                        $result[$name] = $eventId;
                     }
                     // if not check the the branch in the event is same as the commit branch if so add it.
                 } elseif ($repository[$eventId]['git_branch'] == $this->getCommitBranch()) {
-                    $result[] = $eventId;
+                    $result[$name] = $eventId;
                 }
             }
         }
@@ -198,17 +198,16 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 }
 
                 // now update each instance
-                foreach ($events as $event) {
-                    if ($this->updateInstanceCommitInformation($event, $recordId, $payload)) {
-                        // TODO should we trigger Travis? because the branch now custom for each EM and will not match redcap-build instance branch.
-                        // TODO if we decided to trigger Travis. solve the build commit currently its pull latest commit for DEFAULT branch.
-                        // TODO $this->triggerTravisCIBuild($branch)
-                        $this->emLog("webhook triggered for EM $key last commit hash: " . $payload['after']);
-                    } else {
-                        // currently we are only logging to avoid breaking the loop.
-                        $this->emError("could not update EM $key in event " . $event);
-                    }
-                }
+                 foreach ($events as $branch => $event) {
+                     if ($this->updateInstanceCommitInformation($event, $recordId, $payload)) {
+                         // TODO if we decided to trigger Travis. solve the build commit currently its pull latest commit for DEFAULT branch.
+                         $this->triggerTravisCIBuild($branch);
+                         $this->emLog("webhook triggered for EM $key last commit hash: " . $payload['after']);
+                     } else {
+                         // currently we are only logging to avoid breaking the loop.
+                         $this->emError("could not update EM $key in event " . $event);
+                     }
+                 }
                 // no need to go over other EM
                 break;
             }
@@ -268,7 +267,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 //        $this->emLog(hash_equals($hash, hash_hmac($algo, $rawPost, $secret)));
         // $this->emLog($rawPost);
         if (!hash_equals($hash, hash_hmac($algo, $rawPost, $secret))) {
-            throw new \Exception('Hook secret does not match.');
+            throw new \Exception('Hook secret is invalid.');
         }
     }
 
@@ -826,7 +825,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             'body' => json_encode(array('request' => array(
                 //'branch' => $this->getDefaultREDCapBuildRepoBranch(),
                 'branch' => $branch,
-                'sha' => $this->getShaForLatestDefaultBranchCommitForREDCapBuild()
+                'sha' => $this->getShaForBranchCommitForREDCapBuild($branch)
             )))
         ]);
         $body = json_decode($response->getBody());
@@ -861,35 +860,36 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     /**
      * @return string
      */
-    public function getShaForLatestDefaultBranchCommitForREDCapBuild(): string
+    public function getShaForBranchCommitForREDCapBuild($branch = ''): string
     {
-        if ($this->ShaForLatestDefaultBranchCommitForREDCapBuild) {
-            return $this->ShaForLatestDefaultBranchCommitForREDCapBuild;
+        if ($this->ShaForBranchCommitForREDCapBuild) {
+            return $this->ShaForBranchCommitForREDCapBuild;
 
         } else {
-            $this->setShaForLatestDefaultBranchCommitForREDCapBuild();
-            return $this->ShaForLatestDefaultBranchCommitForREDCapBuild;
+            $this->setShaForBranchCommitForREDCapBuild($branch);
+            return $this->ShaForBranchCommitForREDCapBuild;
         }
     }
 
     /**
-     * @param string $ShaForLatestDefaultBranchCommitForREDCapBuild
+     * @param string $ShaForBranchCommitForREDCapBuild
+     * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    public function setShaForLatestDefaultBranchCommitForREDCapBuild(): void
+    public function setShaForBranchCommitForREDCapBuild($branch = ''): void
     {
-        $commit = $this->getLatestCommitForDefaultBranchForREDCapBuild();
-        $this->ShaForLatestDefaultBranchCommitForREDCapBuild = $commit->sha;
+        $commit = $this->getLatestCommitForBranchForREDCapBuild($branch);
+        $this->ShaForBranchCommitForREDCapBuild = $commit->sha;
     }
 
 
     /**
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    public function getLatestCommitForDefaultBranchForREDCapBuild()
+    public function getLatestCommitForBranchForREDCapBuild($branch = '')
     {
         $key = Repository::getGithubKey($this->getProjectSetting('redcap-build-github-repo'));
 
-        $response = $this->getGuzzleClient()->get('https://api.github.com/repos/susom/' . $key . '/commits/' . $this->getDefaultREDCapBuildRepoBranch(), [
+        $response = $this->getGuzzleClient()->get('https://api.github.com/repos/susom/' . $key . '/commits/' . ($branch != '' ? $branch : $this->getDefaultREDCapBuildRepoBranch()), [
             'headers' => [
                 'Authorization' => 'token ' . $this->getAccessToken(),
                 'Accept' => 'application/vnd.github.v3+json'

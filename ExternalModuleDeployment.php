@@ -75,6 +75,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     private $branchEventId;
 
     private $client;
+
     public function __construct()
     {
         parent::__construct();
@@ -236,32 +237,32 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         // Test master remove
         foreach ($this->getRedcapRepositories() as $recordId => $repository) {
             $key = Repository::getGithubKey($repository[$this->getFirstEventId()]['git_url']);
-             if ($key == $payload['repository']['name']) {
-                 $this->emLog("====================================");
-                 if ($this->isPayloadBranchADefaultBranch($payload)) {
-                     $eventId = $this->getFirstEventId();
-                     $this->emLog("Event Id:", $eventId);
-                     // first update the first event instance
-                     //$this->updateInstanceCommitInformation($eventId, $recordId, $payload);
-                     // next find other instances for deployment.
-                     $events = $this->findCommitDeploymentEventIds($repository, true);
-                     $this->emLog($events);
-                 } else {
+            if ($key == $payload['repository']['name']) {
+                $this->emLog("====================================");
+                if ($this->isPayloadBranchADefaultBranch($payload)) {
+                    $eventId = $this->getFirstEventId();
+                    $this->emLog("Event Id:", $eventId);
+                    // first update the first event instance
+                    //$this->updateInstanceCommitInformation($eventId, $recordId, $payload);
+                    // next find other instances for deployment.
+                    $events = $this->findCommitDeploymentEventIds($repository, true);
+                    $this->emLog($events);
+                } else {
                     $events = $this->findCommitDeploymentEventIds($repository);
                 }
 
                 // now update each instance
-                 $commit = end($payload['commits']);
-                 foreach ($events as $branch => $event) {
-                     if ($this->updateInstanceCommitInformation($event, $recordId, $payload['repository']['name'], $payload['after'], $commit['timestamp'])) {
-                         // TODO if we decided to trigger Travis. solve the build commit currently its pull latest commit for DEFAULT branch.
-                         $this->triggerTravisCIBuild($branch);
-                         $this->emLog("webhook triggered for EM $key last commit hash: " . $payload['after']);
-                     } else {
-                         // currently we are only logging to avoid breaking the loop.
-                         $this->emError("could not update EM $key in event " . $event);
-                     }
-                 }
+                $commit = end($payload['commits']);
+                foreach ($events as $branch => $event) {
+                    if ($this->updateInstanceCommitInformation($event, $recordId, $payload['repository']['name'], $payload['after'], $commit['timestamp'])) {
+                        // TODO if we decided to trigger Travis. solve the build commit currently its pull latest commit for DEFAULT branch.
+                        $this->triggerTravisCIBuild($branch);
+                        $this->emLog("webhook triggered for EM $key last commit hash: " . $payload['after']);
+                    } else {
+                        // currently we are only logging to avoid breaking the loop.
+                        $this->emError("could not update EM $key in event " . $event);
+                    }
+                }
                 // no need to go over other EM
                 break;
             }
@@ -535,7 +536,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 $commit = $repository[$this->getBranchEventId()]['git_commit'];
             }
             // only write if branch and last commit different from what is saved in redcap.
-            echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $recordId . "_v9.9.9," . ($this->getCommitBranch('', '') != $repository[$this->getFirstEventId()]['git_branch'] ? $this->getCommitBranch('', '') : '') . "," . ($commit != $repository[$this->getFirstEventId()]['git_commit'] ? $commit : '') . "\n";
+            echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $recordId . "_v9.9.9," . $repository[$this->getBranchEventId()]['git_branch'] . "," . ($commit != $repository[$this->getFirstEventId()]['git_commit'] ? $commit : '') . "\n";
 //                }
 //            }
 

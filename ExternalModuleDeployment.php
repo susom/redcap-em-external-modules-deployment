@@ -148,6 +148,8 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             'events' => $event_id,
             'records' => [$record]
         );
+
+        // TODO just apply this for new records.
         $data = REDCap::getData($param);
         $this->setRepository(new Repository($this->getClient(), $data));
         if ($data[$record][$event_id]['git_url'] != '') {

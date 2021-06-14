@@ -14,7 +14,7 @@ try {
     if (md5($_POST['key']) != md5($module->getProjectSetting('travis-config-secret'))) {
         throw new \Exception("key does not match");
     }
-
+    // test commit
     if (isset($_POST['branch']) && $_POST['branch'] != '') {
         $module->setCommitBranch('', '', filter_var($_POST['branch'], FILTER_SANITIZE_STRING));
 

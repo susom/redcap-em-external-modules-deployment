@@ -149,31 +149,27 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         );
         $data = REDCap::getData($param);
         $this->setRepository(new Repository($this->getClient(), $data));
-        $key = Repository::getGithubKey($data[$record][$event_id]['git_url']);
-        list($commitBranch, $commit) = $this->getRepositoryDefaultBranchLatestCommit($key);
+        if ($data[$record][$event_id]['git_url'] != '') {
+            $key = Repository::getGithubKey($data[$record][$event_id]['git_url']);
+            list($commitBranch, $commit) = $this->getRepositoryDefaultBranchLatestCommit($key);
 
-        if ($event_id == $this->getFirstEventId()) {
-            $events = $this->findCommitDeploymentEventIds($data[$record], true);
+            if ($event_id == $this->getFirstEventId()) {
+                $events = $this->findCommitDeploymentEventIds($data[$record], true);
 
-            foreach ($events as $branch => $event) {
-                if ($this->updateInstanceCommitInformation($event, $record, $key, $commit->sha, $commit->commit->author->date, $commitBranch)) {
-                    // TODO if we decided to trigger Travis. solve the build commit currently its pull latest commit for DEFAULT branch.
-                    //$this->triggerTravisCIBuild($branch);
-                    $this->emLog("webhook triggered for EM $key last commit hash: " . $commit->sha);
-                } else {
-                    // currently we are only logging to avoid breaking the loop.
-                    $this->emError("could not update EM $key in event " . $event);
+                foreach ($events as $branch => $event) {
+                    if ($this->updateInstanceCommitInformation($event, $record, $key, $commit->sha, $commit->commit->author->date, $commitBranch)) {
+                        // TODO if we decided to trigger Travis. solve the build commit currently its pull latest commit for DEFAULT branch.
+                        //$this->triggerTravisCIBuild($branch);
+                        $this->emLog("webhook triggered for EM $key last commit hash: " . $commit->sha);
+                    } else {
+                        // currently we are only logging to avoid breaking the loop.
+                        $this->emError("could not update EM $key in event " . $event);
+                    }
                 }
+
             }
-
         }
 
-        if (empty($response['errors'])) {
-            return true;
-        } else {
-            $this->emError($response);
-            throw new \Exception("cant update last commit for EM : " . $key);
-        }
     }
 
     public function determineCommitBranch($repository, $payload)

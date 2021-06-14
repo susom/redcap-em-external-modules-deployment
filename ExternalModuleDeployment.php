@@ -833,16 +833,17 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
     /**
      * @return string
+     * @throws \GuzzleHttp\Exception\GuzzleException
      */
     public function getShaForBranchCommitForREDCapBuild($branch = ''): string
     {
-        if ($this->ShaForBranchCommitForREDCapBuild) {
-            return $this->ShaForBranchCommitForREDCapBuild;
-
-        } else {
-            $this->setShaForBranchCommitForREDCapBuild($branch);
-            return $this->ShaForBranchCommitForREDCapBuild;
-        }
+//        if ($this->ShaForBranchCommitForREDCapBuild) {
+//            return $this->ShaForBranchCommitForREDCapBuild;
+//
+//        } else {
+        $this->setShaForBranchCommitForREDCapBuild($branch);
+        return $this->ShaForBranchCommitForREDCapBuild;
+//        }
     }
 
     /**

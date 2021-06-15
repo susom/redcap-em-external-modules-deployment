@@ -300,6 +300,9 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         }
     }
 
+    /**
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     */
     public function updateREDCapRepositoriesWithLastCommit()
     {
         foreach ($this->getRedcapRepositories() as $recordId => $repository) {

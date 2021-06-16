@@ -142,44 +142,38 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
      */
     public function redcap_save_record(int $project_id, string $record = NULL, string $instrument, int $event_id, int $group_id = NULL, string $survey_hash = NULL, int $response_id = NULL, int $repeat_instance = 1)
     {
-        $param = array(
-            'project_id' => $project_id,
-            'return_format' => 'array',
-            'events' => $event_id,
-            'records' => [$record]
-        );
+        if ($event_id == $this->getFirstEventId()) {
+            $param = array(
+                'project_id' => $project_id,
+                'return_format' => 'array',
+                'events' => $event_id,
+                'records' => [$record]
+            );
 
-        // TODO just apply this for new records.
-        $data = REDCap::getData($param);
-        $this->setRepository(new Repository($this->getClient(), $data));
-        if ($data[$record][$event_id]['git_url'] != '') {
-            $key = Repository::getGithubKey($data[$record][$event_id]['git_url']);
-            list($commitBranch, $commit) = $this->getRepositoryDefaultBranchLatestCommit($key);
 
-            if ($event_id == $this->getFirstEventId()) {
+            $data = REDCap::getData($param);
+            $this->setRepository(new Repository($this->getClient(), $data));
+            if ($data[$record][$event_id]['git_url'] != '') {
+                $key = Repository::getGithubKey($data[$record][$event_id]['git_url']);
+                list($commitBranch, $commit) = $this->getRepositoryDefaultBranchLatestCommit($key);
+
                 $events = $this->findCommitDeploymentEventIds($data[$record], true);
 
-                foreach ($events as $branch => $event) {
-                    if ($this->updateInstanceCommitInformation($event, $record, $key, $commit->sha, $commit->commit->author->date, $commitBranch)) {
-                        // TODO if we decided to trigger Travis. solve the build commit currently its pull latest commit for DEFAULT branch.
-                        //$this->triggerTravisCIBuild($branch);
-                        $this->emLog("webhook triggered for EM $key last commit hash: " . $commit->sha);
-                    } else {
-                        // currently we are only logging to avoid breaking the loop.
-                        $this->emError("could not update EM $key in event " . $event);
+                if (!empty($events)) {
+                    foreach ($events as $branch => $event) {
+                        if ($this->updateInstanceCommitInformation($event, $record, $key, $commit->sha, $commit->commit->author->date, $commitBranch)) {
+                            // TODO if we decided to trigger Travis. solve the build commit currently its pull latest commit for DEFAULT branch.
+                            //$this->triggerTravisCIBuild($branch);
+                            $this->emLog("webhook triggered for EM $key last commit hash: " . $commit->sha);
+                        } else {
+                            // currently we are only logging to avoid breaking the loop.
+                            $this->emError("could not update EM $key in event " . $event);
+                        }
                     }
                 }
-
             }
         }
 
-    }
-
-    public function determineCommitBranch($repository, $payload)
-    {
-        if ($this->isPayloadBranchADefaultBranch($payload)) {
-            return $this->getFirstEventId();
-        }
 
     }
 

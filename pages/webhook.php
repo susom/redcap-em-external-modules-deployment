@@ -12,7 +12,7 @@ try {
     $input = trim(file_get_contents('php://input'));
     $data = json_decode($input, true);
 
-    // test commit.
+    // test
     if (!empty($data)) {
         $module->emLog($data['repository']['name']);
 //        $payload = json_decode($data, true);

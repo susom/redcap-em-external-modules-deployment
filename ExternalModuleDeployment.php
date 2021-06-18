@@ -347,7 +347,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                     }
 
 
-                    if ($this->updateInstanceCommitInformation($event, $recordId, $payload['repository']['name'], $payload['after'], $commit['timestamp'], $this->shouldDeployInstance($repository[$recordId], $branch))) {
+                    if ($this->updateInstanceCommitInformation($event, $recordId, $payload['repository']['name'], $payload['after'], $commit['timestamp'], $this->shouldDeployInstance($repository, $branch))) {
 
                         $this->triggerTravisCIBuild($branch);
                         $this->emLog("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $payload['after']);

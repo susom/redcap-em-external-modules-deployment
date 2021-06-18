@@ -164,8 +164,20 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                     foreach ($events as $branch => $event) {
 
                         if (!$this->canUpdateEvent($event, $commitBranch, $data[$record], $commit)) {
-                            $this->triggerTravisCIBuild($branch);
-                            $this->emLog("Travis build webhook triggered for branch $branch because $key was disabled");
+
+                            // lets get non-default branch commit and compare it to what is saved in redcap
+                            $nonDefaultBranch = $data[$record][$event]['git_branch'];
+                            $nonDefaultCommit = $this->getRepository()->getRepositoryBranchCommits($key, $nonDefaultBranch);
+
+                            // if commit are different between
+                            if ($nonDefaultCommit->sha != $data[$record][$event]['git_commit']) {
+                                if ($this->updateInstanceCommitInformation($event, $record, $key, $nonDefaultCommit->sha, $nonDefaultCommit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $nonDefaultBranch)) {
+                                    $this->triggerTravisCIBuild($branch);
+                                    $this->emLog("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $nonDefaultCommit->sha);
+                                }
+                            } else {
+                                $this->emLog("Travis build webhook was ignored because no change in commit hash.");
+                            }
 
                             continue;
                         }

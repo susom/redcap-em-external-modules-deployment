@@ -193,17 +193,17 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     private function canUpdateEvent($eventId, $branch, $data, $commit): bool
     {
         // if EM disabled.
-        if ($data[$eventId]['deploy_instance___1'] != $this->shouldDeployInstance($data, $branch)) {
-            return true;
-        }
-        // check the branch is the same for event and default
-        if ($data[$eventId]['git_branch'] != '' && $data[$eventId]['git_branch'] != $branch) {
-            return false;
-        }
-        // if commit did not change no need to build
-        if ($data[$eventId]['git_commit'] == $commit->sha) {
-            return false;
-        }
+//        if ($data[$eventId]['deploy_instance___1'] != $this->shouldDeployInstance($data, $branch)) {
+//            return true;
+//        }
+//        // check the branch is the same for event and default
+//        if ($data[$eventId]['git_branch'] != '' && $data[$eventId]['git_branch'] != $branch) {
+//            return false;
+//        }
+//        // if commit did not change no need to build
+//        if ($data[$eventId]['git_commit'] == $commit->sha) {
+//            return false;
+//        }
 
         return true;
     }

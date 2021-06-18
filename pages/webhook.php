@@ -5,7 +5,7 @@ namespace Stanford\ExternalModuleDeployment;
 
 
 try {
-    //verify github secret.
+    //verify github secret
     $module->verifyWebhookSecret();
 
 

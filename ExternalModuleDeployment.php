@@ -169,10 +169,18 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                             $nonDefaultBranch = $data[$record][$event]['git_branch'];
                             $nonDefaultCommit = $this->getRepository()->getRepositoryBranchCommits($key, $nonDefaultBranch);
 
+                            $deploy_instance = $data[$record][$event]['deploy_instance']["1"];
+
                             // we need to update because here
                             if ($this->updateInstanceCommitInformation($event, $record, $key, $nonDefaultCommit->sha, $nonDefaultCommit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $nonDefaultBranch)) {
-                                $this->triggerTravisCIBuild($branch);
-                                $this->emLog("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $nonDefaultCommit->sha);
+                                // if the deploy_instace changed then trigger travis
+                                if ($deploy_instance != $this->shouldDeployInstance($data[$record], $branch)) {
+                                    $this->triggerTravisCIBuild($branch);
+                                    $this->emLog("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $nonDefaultCommit->sha);
+                                } else {
+                                    $this->emLog("Travis build webhook was ignored because no EM was disabled.");
+                                }
+
                             }
                             continue;
                         }
@@ -341,7 +349,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 $commitBranch = $this->getCommitBranch($key, $payload['after']);
                 foreach ($events as $branch => $event) {
 
-
+                    // no need to update redcap record or trigger travis because this triggered via actual commit via github.
                     if (!$this->canUpdateEvent($event, $commitBranch, $repository, $commit)) {
                         continue;
                     }

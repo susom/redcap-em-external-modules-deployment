@@ -81,7 +81,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         parent::__construct();
         // Other code to run when object is instantiated
 
-        if (isset($_GET['pid'])) {
+        if (isset($_GET['pid']) && $this->getProjectSetting('github-installation-id') && $this->getProjectSetting('github-app-private-key')) {
             $this->setProject(new Project(filter_var($_GET['pid'], FILTER_SANITIZE_STRING)));
 
             if (!defined('NOAUTH') || NOAUTH == false) {
@@ -146,7 +146,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             $param = array(
                 'project_id' => $project_id,
                 'return_format' => 'array',
-                'events' => $event_id,
+//                'events' => $event_id,
                 'records' => [$record]
             );
 
@@ -161,7 +161,12 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
                 if (!empty($events)) {
                     foreach ($events as $branch => $event) {
-                        if ($this->updateInstanceCommitInformation($event, $record, $key, $commit->sha, $commit->commit->author->date, $commitBranch)) {
+
+                        if (!$this->canUpdateEvent($event_id, $commitBranch, $data, $commit)) {
+                            continue;
+                        }
+
+                        if ($this->updateInstanceCommitInformation($event, $record, $key, $commit->sha, $commit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $commitBranch)) {
                             // TODO if we decided to trigger Travis. solve the build commit currently its pull latest commit for DEFAULT branch.
                             //$this->triggerTravisCIBuild($branch);
                             $this->emLog("webhook triggered for EM $key last commit hash: " . $commit->sha);
@@ -174,7 +179,27 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             }
         }
 
+    }
 
+    /**
+     * @param int $eventId
+     * @param string $branch
+     * @param array $data
+     * @param \stdClass $commit
+     * @return bool
+     */
+    private function canUpdateEvent($eventId, $branch, $data, $commit): bool
+    {
+        // check the branch is the same for event and default
+        if ($data[$eventId]['git_branch'] != '' && $data[$eventId]['git_branch'] != $branch) {
+            return false;
+        }
+        // if commit did not change no need to build
+        if ($data[$eventId]['git_commit'] == $commit->sha) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -189,9 +214,10 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         $deployments = $repository[$this->getFirstEventId()]['deploy'];
         foreach ($deployments as $name => $deployment) {
             // check if EM is deployed on specific instance.
+            // find the event id
+            $eventId = $this->searchEventViaDescription($options[$name]);
             if ($deployment) {
-                // find the event id
-                $eventId = $this->searchEventViaDescription($options[$name]);
+
                 // for that event if branch was overridden. if not and default branch then deploy .
                 if ($repository[$eventId]['git_branch'] == '') {
                     // if no override then check if this commit for default branch and if so add it to array to be updated.
@@ -201,6 +227,12 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                     }
                     // if not check the the branch in the event is same as the commit branch if so add it.
                 } elseif ($repository[$eventId]['git_branch'] == $this->getCommitBranch() || $defaultBranch) {
+                    $result[$name] = $eventId;
+                }
+            } else {
+
+                // this use case to cover when developer removes EM we want to build to delete EM from instance
+                if ($repository[$eventId]['deploy_instance']["1"] == "1") {
                     $result[$name] = $eventId;
                 }
             }
@@ -250,7 +282,14 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 // now update each instance
                 $commit = end($payload['commits']);
                 foreach ($events as $branch => $event) {
-                    if ($this->updateInstanceCommitInformation($event, $recordId, $payload['repository']['name'], $payload['after'], $commit['timestamp'])) {
+
+
+                    if (!$this->canUpdateEvent($event, $branch, $repository, $commit)) {
+                        continue;
+                    }
+
+
+                    if ($this->updateInstanceCommitInformation($event, $recordId, $payload['repository']['name'], $payload['after'], $commit['timestamp'], $this->shouldDeployInstance($repository[$recordId], $branch))) {
                         // TODO if we decided to trigger Travis. solve the build commit currently its pull latest commit for DEFAULT branch.
                         $this->triggerTravisCIBuild($branch);
                         $this->emLog("webhook triggered for EM $key last commit hash: " . $payload['after']);
@@ -266,14 +305,24 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     }
 
 
+    private function shouldDeployInstance($data, $name)
+    {
+        $deployments = $data[$this->getFirstEventId()]['deploy'];
+        return $deployments[$name];
+    }
+
     /**
      * @param $eventId
      * @param $recordId
-     * @param $payload
+     * @param $name
+     * @param $after
+     * @param $timestamp
+     * @param $deploy_instance
+     * @param string $branch
      * @return bool
      * @throws \Exception
      */
-    public function updateInstanceCommitInformation($eventId, $recordId, $name, $after, $timestamp, $branch = ''): bool
+    public function updateInstanceCommitInformation($eventId, $recordId, $name, $after, $timestamp, $deploy_instance, $branch = ''): bool
     {
         $data[REDCap::getRecordIdField()] = $recordId;
         if ($branch == '') {
@@ -283,6 +332,12 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         }
 
         $data['git_commit'] = $after;
+        if ($deploy_instance) {
+            $data['deploy_instance___1'] = 1;
+        } else {
+            $data['deploy_instance___1'] = 0;
+        }
+
         $data['date_of_latest_commit'] = $timestamp;
         $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($eventId);
         $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
@@ -341,7 +396,9 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
             // get default branch
             if ($branch == '') {
+
                 $branch = $this->getRepository()->getRepositoryDefaultBranch($key);
+                $this->setCommitBranch('', '', $branch);
             }
 
             // get latest commit for default branch
@@ -535,7 +592,20 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 $commit = $repository[$this->getBranchEventId()]['git_commit'];
             }
             // only write if branch and last commit different from what is saved in redcap.
-            echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $recordId . "_v9.9.9," . $repository[$this->getBranchEventId()]['git_branch'] . "," . ($commit != $repository[$this->getFirstEventId()]['git_commit'] ? $commit : '') . "\n";
+            if ($repository[$this->getFirstEventId()]['deploy_version']) {
+                $version = $repository[$this->getFirstEventId()]['deploy_version'];
+            } else {
+                $version = "9.9.9";
+            }
+
+            if ($repository[$this->getFirstEventId()]['deploy_folder']) {
+                $folder = $repository[$this->getFirstEventId()]['deploy_folder'];
+            } else {
+                $folder = $recordId;
+            }
+
+
+            echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . $repository[$this->getBranchEventId()]['git_branch'] . "," . ($commit != $repository[$this->getFirstEventId()]['git_commit'] ? $commit : '') . "\n";
 //                }
 //            }
 

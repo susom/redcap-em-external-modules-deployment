@@ -58,7 +58,7 @@ class Repository
     /**
      * @param $key
      * @param $branch
-     * @return mixed
+     * @return \stdClass
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
     public function getRepositoryBranchCommits($key, $branch)

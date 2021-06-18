@@ -142,16 +142,17 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
      */
     public function redcap_save_record(int $project_id, string $record = NULL, string $instrument, int $event_id, int $group_id = NULL, string $survey_hash = NULL, int $response_id = NULL, int $repeat_instance = 1)
     {
-        if ($event_id == $this->getFirstEventId()) {
-            $param = array(
-                'project_id' => $project_id,
-                'return_format' => 'array',
+        $param = array(
+            'project_id' => $project_id,
+            'return_format' => 'array',
 //                'events' => $event_id,
-                'records' => [$record]
-            );
+            'records' => [$record]
+        );
 
 
-            $data = REDCap::getData($param);
+        $data = REDCap::getData($param);
+        if ($event_id == $this->getFirstEventId()) {
+
             $this->setRepository(new Repository($this->getClient(), $data));
             if ($data[$record][$event_id]['git_url'] != '') {
                 $key = Repository::getGithubKey($data[$record][$event_id]['git_url']);
@@ -163,13 +164,20 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                     foreach ($events as $branch => $event) {
 
                         if (!$this->canUpdateEvent($event, $commitBranch, $data[$record], $commit)) {
+                            $this->triggerTravisCIBuild($branch);
+                            $this->emLog("Travis build webhook triggered for branch $branch because $key was disabled");
+
                             continue;
                         }
 
                         if ($this->updateInstanceCommitInformation($event, $record, $key, $commit->sha, $commit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $commitBranch)) {
-                            // TODO if we decided to trigger Travis. solve the build commit currently its pull latest commit for DEFAULT branch.
-                            //$this->triggerTravisCIBuild($branch);
-                            $this->emLog("webhook triggered for EM $key last commit hash: " . $commit->sha);
+                            if ($this->isCommitChanged($data[$event]['git_commit'], $commit->sha)) {
+                                $this->triggerTravisCIBuild($branch);
+                                $this->emLog("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $commit->sha);
+                            } else {
+                                $this->emLog("Travis build webhook was ignored because no change in commit hash.");
+                            }
+
                         } else {
                             // currently we are only logging to avoid breaking the loop.
                             $this->emError("could not update EM $key in event " . $event);
@@ -177,8 +185,37 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                     }
                 }
             }
+        } else {
+            $commitBranch = $data[$record][$event_id]['git_branch'];
+            $key = Repository::getGithubKey($data[$record][$this->getFirstEventId()]['git_url']);
+            if ($commitBranch == '') {
+                $commitBranch = $this->getRepository()->getRepositoryDefaultBranch($key);
+            }
+
+            $commit = $this->getRepository()->getRepositoryBranchCommits($key, $commitBranch);
+
+            $branch = $this->searchBranchNameViaEventId($event_id);
+            // if commit are different between
+            if ($commit->sha != $data[$record][$event_id]['git_commit']) {
+                if ($this->updateInstanceCommitInformation($event_id, $record, $key, $commit->sha, $commit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $commitBranch)) {
+                    $this->triggerTravisCIBuild($branch);
+                    $this->emLog("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $commit->sha);
+                }
+            } else {
+                $this->emLog("Travis build webhook was ignored because no change in commit hash.");
+            }
         }
 
+    }
+
+    /**
+     * @param $redcapCommit
+     * @param $gitCommit
+     * @return bool
+     */
+    public function isCommitChanged($redcapCommit, $gitCommit)
+    {
+        return $redcapCommit == $gitCommit;
     }
 
     /**
@@ -191,18 +228,10 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     private function canUpdateEvent($eventId, $branch, $data, $commit): bool
     {
 
-        // if EM disabled.
-//        if ($data[$eventId]['deploy_instance___1'] != $this->shouldDeployInstance($data, $branch)) {
-//            return true;
-//        }
-//        // check the branch is the same for event and default
+        // check the branch is the same for event and default
         if ($data[$eventId]['git_branch'] != '' && $data[$eventId]['git_branch'] != $branch) {
             return false;
         }
-//        // if commit did not change no need to build
-//        if ($data[$eventId]['git_commit'] == $commit->sha) {
-//            return false;
-//        }
 
         return true;
     }
@@ -243,6 +272,23 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             }
         }
         return $result;
+    }
+
+
+    /**
+     * @param $description
+     * @return int|string
+     * @throws \Exception
+     */
+    private function searchBranchNameViaEventId($eventId)
+    {
+        $arm = end($this->getProject()->events);
+        $description = $arm['events'][$eventId]['descrip'];
+        $options = parseEnum($this->getProject()->metadata['deploy']['element_enum']);
+        if ($index = array_search($description, $options)) {
+            return $index;
+        }
+        throw new \Exception("could not find branch for event $eventId");
     }
 
     /**
@@ -294,9 +340,9 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
 
                     if ($this->updateInstanceCommitInformation($event, $recordId, $payload['repository']['name'], $payload['after'], $commit['timestamp'], $this->shouldDeployInstance($repository[$recordId], $branch))) {
-                        // TODO if we decided to trigger Travis. solve the build commit currently its pull latest commit for DEFAULT branch.
+
                         $this->triggerTravisCIBuild($branch);
-                        $this->emLog("webhook triggered for EM $key last commit hash: " . $payload['after']);
+                        $this->emLog("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $payload['after']);
                     } else {
                         // currently we are only logging to avoid breaking the loop.
                         $this->emError("could not update EM $key in event " . $event);

@@ -166,6 +166,8 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                             continue;
                         }
 
+                        $this->emLog($branch);
+                        $this->emLog($this->shouldDeployInstance($data[$record], $branch));
                         if ($this->updateInstanceCommitInformation($event, $record, $key, $commit->sha, $commit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $commitBranch)) {
                             // TODO if we decided to trigger Travis. solve the build commit currently its pull latest commit for DEFAULT branch.
                             //$this->triggerTravisCIBuild($branch);
@@ -266,15 +268,12 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         foreach ($this->getRedcapRepositories() as $recordId => $repository) {
             $key = Repository::getGithubKey($repository[$this->getFirstEventId()]['git_url']);
             if ($key == $payload['repository']['name']) {
-                $this->emLog("====================================");
                 if ($this->isPayloadBranchADefaultBranch($payload)) {
                     $eventId = $this->getFirstEventId();
-                    $this->emLog("Event Id:", $eventId);
                     // first update the first event instance
                     //$this->updateInstanceCommitInformation($eventId, $recordId, $payload);
                     // next find other instances for deployment.
                     $events = $this->findCommitDeploymentEventIds($repository, true);
-                    $this->emLog($events);
                 } else {
                     $events = $this->findCommitDeploymentEventIds($repository);
                 }
@@ -340,6 +339,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
         $data['date_of_latest_commit'] = $timestamp;
         $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($eventId);
+        $this->emLog("Data", $data);
         $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
         if (empty($response['errors'])) {
             return true;

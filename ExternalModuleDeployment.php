@@ -192,14 +192,18 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
      */
     private function canUpdateEvent($eventId, $branch, $data, $commit): bool
     {
+        $this->emLog($eventId);
+        $this->emLog($branch);
+        $this->emLog($data);
+        $this->emLog($commit);
         // if EM disabled.
 //        if ($data[$eventId]['deploy_instance___1'] != $this->shouldDeployInstance($data, $branch)) {
 //            return true;
 //        }
 //        // check the branch is the same for event and default
-//        if ($data[$eventId]['git_branch'] != '' && $data[$eventId]['git_branch'] != $branch) {
-//            return false;
-//        }
+        if ($data[$eventId]['git_branch'] != '' && $data[$eventId]['git_branch'] != $branch) {
+            return false;
+        }
 //        // if commit did not change no need to build
 //        if ($data[$eventId]['git_commit'] == $commit->sha) {
 //            return false;
@@ -282,12 +286,14 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                     $events = $this->findCommitDeploymentEventIds($repository);
                 }
 
+
                 // now update each instance
                 $commit = end($payload['commits']);
+                $commitBranch = $this->getCommitBranch($key, $payload['after']);
                 foreach ($events as $branch => $event) {
 
 
-                    if (!$this->canUpdateEvent($event, $branch, $repository, $commit)) {
+                    if (!$this->canUpdateEvent($event, $commitBranch, $repository, $commit)) {
                         continue;
                     }
 

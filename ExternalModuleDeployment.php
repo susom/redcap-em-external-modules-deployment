@@ -186,6 +186,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 }
             }
         } else {
+            // handle saving instance
             $commitBranch = $data[$record][$event_id]['git_branch'];
             $key = Repository::getGithubKey($data[$record][$this->getFirstEventId()]['git_url']);
             if ($commitBranch == '') {

@@ -24,6 +24,7 @@ try {
     }
 } catch (\Exception $e) {
     $module->emError($e->getMessage());
+    \REDCap::logEvent($e->getMessage());
     http_response_code(404);
     echo json_encode(array('status' => 'error', 'message' => $e->getMessage()));
 }

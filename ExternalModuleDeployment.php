@@ -598,8 +598,8 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 $version = "9.9.9";
             }
 
-            if ($repository[$this->getFirstEventId()]['deploy_folder']) {
-                $folder = $repository[$this->getFirstEventId()]['deploy_folder'];
+            if ($repository[$this->getFirstEventId()]['deploy_name']) {
+                $folder = $repository[$this->getFirstEventId()]['deploy_name'];
             } else {
                 $folder = $recordId;
             }

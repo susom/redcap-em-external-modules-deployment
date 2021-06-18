@@ -335,7 +335,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         if ($deploy_instance) {
             $data['deploy_instance___1'] = 1;
         } else {
-            $data['deploy_instance___1'] = 0;
+            $data['deploy_instance___1'] = '';
         }
 
         $data['date_of_latest_commit'] = $timestamp;

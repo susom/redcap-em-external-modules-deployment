@@ -162,7 +162,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 if (!empty($events)) {
                     foreach ($events as $branch => $event) {
 
-                        if (!$this->canUpdateEvent($event_id, $commitBranch, $data, $commit)) {
+                        if (!$this->canUpdateEvent($event, $commitBranch, $data[$record], $commit)) {
                             continue;
                         }
 

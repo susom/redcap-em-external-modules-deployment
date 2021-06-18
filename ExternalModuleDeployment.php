@@ -166,8 +166,6 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                             continue;
                         }
 
-                        $this->emLog($branch);
-                        $this->emLog($this->shouldDeployInstance($data[$record], $branch));
                         if ($this->updateInstanceCommitInformation($event, $record, $key, $commit->sha, $commit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $commitBranch)) {
                             // TODO if we decided to trigger Travis. solve the build commit currently its pull latest commit for DEFAULT branch.
                             //$this->triggerTravisCIBuild($branch);
@@ -192,10 +190,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
      */
     private function canUpdateEvent($eventId, $branch, $data, $commit): bool
     {
-        $this->emLog($eventId);
-        $this->emLog($branch);
-        $this->emLog($data);
-        $this->emLog($commit);
+
         // if EM disabled.
 //        if ($data[$eventId]['deploy_instance___1'] != $this->shouldDeployInstance($data, $branch)) {
 //            return true;
@@ -344,12 +339,11 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         if ($deploy_instance) {
             $data['deploy_instance___1'] = 1;
         } else {
-            $data['deploy_instance___1'] = '';
+            $data['deploy_instance___1'] = 0;
         }
 
         $data['date_of_latest_commit'] = $timestamp;
         $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($eventId);
-        $this->emLog("Data", $data);
         $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
         if (empty($response['errors'])) {
             return true;
@@ -380,15 +374,10 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     public function verifyWebhookSecret()
     {
         list($algo, $hash) = explode('=', $_SERVER['HTTP_X_HUB_SIGNATURE'], 2) + array('', '');
-//        $this->emLog("************************************************************************************************************************************");
-//        $this->emLog($algo);
+
         $rawPost = trim(file_get_contents('php://input'));
         $secret = $this->getProjectSetting('github-webhook-secret');
-//        $this->emLog("secret    " . $secret);
-//        $this->emLog("hash      " . $hash);
-//        $this->emLog("hash_hmac " . hash_hmac($algo, $rawPost, $secret));
-//        $this->emLog(hash_equals($hash, hash_hmac($algo, $rawPost, $secret)));
-        // $this->emLog($rawPost);
+
         if (!hash_equals($hash, hash_hmac($algo, $rawPost, $secret))) {
             throw new \Exception('Hook secret is invalid.');
         }
@@ -472,7 +461,6 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             'ems-enabled' => json_encode($versionsByPrefix),
             'ems-orphaned' => json_encode($orphans)
         ];
-        $this->emLog("ems-enabled", $payload);
 
         // Save to em settings
         $this->setProjectSetting('ems-enabled', $versionsByPrefix, $project_id);
@@ -520,8 +508,6 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         $gitRepositoriesDirectories = array();
         foreach ($folders as $folder) {
             $path = $this->getFolderPath($folder);
-//            $this->emLog($path);
-//            $this->emLog(is_dir($path));
             if ($folder == '.' || $folder == '..' || !$path) {
                 continue;
             } else {

@@ -12,7 +12,7 @@ try {
     $input = trim(file_get_contents('php://input'));
     $data = json_decode($input, true);
 
-    // test dev instances.
+    // test dev commit.
     if (!empty($data)) {
         $module->emLog($data['repository']['name']);
 //        $payload = json_decode($data, true);
@@ -24,6 +24,7 @@ try {
     }
 } catch (\Exception $e) {
     $module->emError($e->getMessage());
+    \REDCap::logEvent($e->getMessage());
     http_response_code(404);
     echo json_encode(array('status' => 'error', 'message' => $e->getMessage()));
 }

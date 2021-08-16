@@ -219,7 +219,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
             $branch = $this->searchBranchNameViaEventId($event_id);
             // if commit are different between
-            if ($commit->sha != $data[$record][$event_id]['git_commit']) {
+            if ($this->isCommitChanged($data[$record][$event_id]['git_commit'], $commit->sha)) {
                 if ($this->updateInstanceCommitInformation($event_id, $record, $key, $commit->sha, $commit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $commitBranch)) {
                     $this->triggerTravisCIBuild($branch);
                     $this->emLog("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $commit->sha);
@@ -240,7 +240,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
      */
     public function isCommitChanged($redcapCommit, $gitCommit)
     {
-        return $redcapCommit == $gitCommit;
+        return $redcapCommit != $gitCommit;
     }
 
     /**

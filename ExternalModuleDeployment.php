@@ -547,7 +547,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     {
         $response = $this->getClient()->get('https://api.github.com/repos/susom/' . $key . ($command ? '/' . $command : ''), [
             'headers' => [
-                'Authorization' => 'token ' . $this->getAccessToken(),
+                'Authorization' => 'token ' . $this->getClient()->getAccessToken(),
                 'Accept' => 'application/vnd.github.v3+json'
             ]
         ]);

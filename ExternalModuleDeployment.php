@@ -366,6 +366,10 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
                     $canBuild = $repository[$event]['auto_deploy'] == null || $repository[$event]['auto_deploy'] == 1;
 
+                    $this->emLog("============================");
+                    $this->emLog($repository[$event]);
+                    $this->emLog($canBuild);
+                    $this->emLog("============================");
                     if ($this->updateInstanceCommitInformation($event, $recordId, $payload['repository']['name'], $payload['after'], $commit['timestamp'], $this->shouldDeployInstance($repository, $branch))) {
 
                         $this->addBuildRecord($event, $recordId, $payload['after'], $commit['timestamp'], $canBuild);

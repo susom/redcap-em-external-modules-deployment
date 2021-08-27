@@ -366,10 +366,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
                     $canBuild = $repository[$event]['auto_deploy'] == null || $repository[$event]['auto_deploy'] == 1;
 
-                    $this->emLog("============================");
-                    $this->emLog($repository[$event]);
-                    $this->emLog($canBuild);
-                    $this->emLog("============================");
+
                     if ($this->updateInstanceCommitInformation($event, $recordId, $payload['repository']['name'], $payload['after'], $commit['timestamp'], $this->shouldDeployInstance($repository, $branch))) {
 
                         $this->addBuildRecord($event, $recordId, $payload['after'], $commit['timestamp'], $canBuild);
@@ -435,6 +432,10 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         $data['build_created_at'] = $timestamp;
         $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($eventId);
         $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
+        $this->emLog("============================");
+        $this->emLog($data);
+        $this->emLog($response);
+        $this->emLog("============================");
         if (empty($response['errors'])) {
             return true;
         } else {

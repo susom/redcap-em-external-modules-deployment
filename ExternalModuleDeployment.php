@@ -480,6 +480,9 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         $data['date_of_latest_commit'] = $timestamp;
         $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($eventId);
         $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
+        $this->emLog("****************************");
+        $this->emLog($response);
+        $this->emLog("****************************");
         if (empty($response['errors'])) {
             return true;
         } else {

@@ -373,20 +373,16 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                     $this->emLog($canBuild);
                     $this->emLog("+++++++++++++++++++++++++++++");
 
-                    if ($this->updateInstanceCommitInformation($event, $recordId, $payload['repository']['name'], $payload['after'], $commit['timestamp'], $this->shouldDeployInstance($repository, $branch))) {
+                    $this->addBuildRecord($event, $recordId, $payload['after'], $commit['timestamp'], $canBuild);
 
-                        $this->addBuildRecord($event, $recordId, $payload['after'], $commit['timestamp'], $canBuild);
+                    if ($canBuild && $this->updateInstanceCommitInformation($event, $recordId, $payload['repository']['name'], $payload['after'], $commit['timestamp'], $this->shouldDeployInstance($repository, $branch))) {
 
-                        if ($canBuild) {
-                            $this->triggerTravisCIBuild($branch);
-                            $this->emLog("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $payload['after']);
-                            \REDCap::logEvent("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $payload['after']);
-                        } else {
-                            $this->emLog("Auto deployed is disabled for branch $branch by EM $key with commit hash: " . $payload['after']);
-                            \REDCap::logEvent("Auto deployed is disabled for branch $branch by EM $key with commit hash: " . $payload['after']);
-                        }
+                        $this->triggerTravisCIBuild($branch);
+                        $this->emLog("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $payload['after']);
+                        \REDCap::logEvent("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $payload['after']);
+
                     } else {
-                        // currently we are only logging to avoid breaking the loop.
+                        // currently, we are only logging to avoid breaking the loop.
                         $this->emError("could not update EM $key in event " . $event);
                         \REDCap::logEvent("could not update EM $key in event " . $event);
                     }
@@ -405,23 +401,35 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
      * @param null $event_id
      * @return int | false (if an error occurs)
      */
-    public function getNextInstanceId($record_id, $event_id = null)
+    /**
+     * get the next available instance number for a form
+     *
+     * @param mixed $record_id
+     * @return int
+     */
+    function getAutoInstanceNumber($record_id, $event_id, $instrument)
     {
-        // If this is a longitudinal project, the event_id must be supplied.
-        if ($this->is_longitudinal && is_null($event_id)) {
-            $this->last_error_message = "You must supply an event_id for longitudinal projects in " . __FUNCTION__;
-            return false;
-        } else if (!$this->is_longitudinal) {
-            $event_id = $this->event_id;
-        }
+        $project_id = $this->getProjectId();
 
-        // Find the last instance and add 1 to it. If there are no current instances, return 1.
-        $last_index = $this->getLastInstanceId($record_id, $event_id);
-        if (is_null($last_index)) {
-            return 1;
-        } else {
-            return ++$last_index;
+        $arr = array_keys($this->getProject()->forms[$instrument]['fields']);
+        $field_list = "'" . implode("','", $arr) . "'";
+
+
+        $query_string = sprintf(
+            "SELECT COALESCE(MAX(IFNULL(instance,1)),0)+1 AS next_instance
+        FROM redcap_data WHERE
+        `project_id` = %u
+        AND `event_id` = %u
+        AND `record`=%s
+        AND `field_name` IN (%s)",
+            $project_id, $event_id, checkNull($record_id), $field_list
+        );
+        $result = db_query($query_string);
+        if ($row = db_fetch_assoc($result)) {
+            $next_instance = @$row['next_instance'];
+            return intval($next_instance);
         }
+        throw new \Exception("Error finding the next instance number in project {$this->project_id}, record {$record_id}", 1);
     }
 
     private function addBuildRecord($eventId, $recordId, $sha, $timestamp, $isDeployed)
@@ -429,10 +437,10 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         $data[REDCap::getRecordIdField()] = $recordId;
 
         $data['redcap_repeat_instrument'] = 'build';
-        $data['redcap_repeat_instance'] = $this->getNextInstanceId();
+        $data['redcap_repeat_instance'] = $this->getAutoInstanceNumber($recordId, $eventId, 'build');
 
 
-        $data['build_git_commit'] = $sha;
+        $data['build_commit_hash'] = $sha;
         $data['build_push_to_travis'] = $isDeployed;
 
         $data['build_created_at'] = $timestamp;

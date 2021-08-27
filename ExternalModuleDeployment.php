@@ -355,7 +355,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
                 $this->emLog("****************************");
                 $this->emLog($payload['repository']['name']);
-                $this->emLog("****************************");
+                $this->emLog("*********************** *****");
 
                 // now update each instance
                 $commit = end($payload['commits']);

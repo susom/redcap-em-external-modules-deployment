@@ -15,7 +15,6 @@ try {
     // test  commit.
     if (!empty($data)) {
         $module->emLog($data['repository']['name']);
-        $module->emLog($data);
 //        $payload = json_decode($data, true);
         $module->updateREDCapRepositoryWithLastCommit($data);
 

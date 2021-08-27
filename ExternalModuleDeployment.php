@@ -353,6 +353,9 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                     $events = $this->findCommitDeploymentEventIds($repository);
                 }
 
+                $this->emLog("****************************");
+                $this->emLog($payload['repository']['name']);
+                $this->emLog("****************************");
 
                 // now update each instance
                 $commit = end($payload['commits']);
@@ -364,8 +367,11 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                         continue;
                     }
 
-                    $canBuild = $repository[$event]['auto_deploy'] == null || $repository[$event]['auto_deploy'] == 1;
 
+                    $canBuild = $repository[$event]['auto_deploy'] == null || $repository[$event]['auto_deploy'] == 1;
+                    $this->emLog("+++++++++++++++++++++++++++++");
+                    $this->emLog($canBuild);
+                    $this->emLog("+++++++++++++++++++++++++++++");
 
                     if ($this->updateInstanceCommitInformation($event, $recordId, $payload['repository']['name'], $payload['after'], $commit['timestamp'], $this->shouldDeployInstance($repository, $branch))) {
 

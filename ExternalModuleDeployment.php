@@ -353,9 +353,6 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                     $events = $this->findCommitDeploymentEventIds($repository);
                 }
 
-                $this->emLog("****************************");
-                $this->emLog($payload['repository']['name']);
-                $this->emLog("*********************** *****");
 
                 // now update each instance
                 $commit = end($payload['commits']);
@@ -369,9 +366,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
 
                     $canBuild = $repository[$event]['auto_deploy'] == null || $repository[$event]['auto_deploy'] == 1;
-                    $this->emLog("+++++++++++++++++++++++++++++");
-                    $this->emLog($canBuild);
-                    $this->emLog("+++++++++++++++++++++++++++++");
+
 
                     $this->addBuildRecord($event, $recordId, $payload['after'], $commit['timestamp'], $canBuild);
 
@@ -446,10 +441,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         $data['build_created_at'] = $timestamp;
         $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($eventId);
         $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
-        $this->emLog("============================");
-        $this->emLog($data);
-        $this->emLog($response);
-        $this->emLog("============================");
+
         if (empty($response['errors'])) {
             return true;
         } else {
@@ -494,9 +486,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         $data['date_of_latest_commit'] = $timestamp;
         $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($eventId);
         $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
-        $this->emLog("****************************");
-        $this->emLog($response);
-        $this->emLog("****************************");
+
         if (empty($response['errors'])) {
             return true;
         } else {

@@ -10,6 +10,7 @@ require_once "classes/Repository.php";
 require_once "classes/Client.php";
 
 use ExternalModules\ExternalModules;
+use GuzzleHttp\Exception\GuzzleException;
 use Stanford\ExternalModuleDeployment\User;
 use Stanford\ExternalModuleDeployment\Repository;
 use Stanford\ExternalModuleDeployment\Client;
@@ -363,12 +364,20 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                         continue;
                     }
 
+                    $canBuild = $repository[$event]['auto_deploy'] == null || $repository[$event]['auto_deploy'] == 1;
 
                     if ($this->updateInstanceCommitInformation($event, $recordId, $payload['repository']['name'], $payload['after'], $commit['timestamp'], $this->shouldDeployInstance($repository, $branch))) {
 
-                        $this->triggerTravisCIBuild($branch);
-                        $this->emLog("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $payload['after']);
-                        \REDCap::logEvent("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $payload['after']);
+                        $this->addBuildRecord($event, $recordId, $payload['after'], $commit['timestamp'], $canBuild);
+
+                        if ($canBuild) {
+                            $this->triggerTravisCIBuild($branch);
+                            $this->emLog("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $payload['after']);
+                            \REDCap::logEvent("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $payload['after']);
+                        } else {
+                            $this->emLog("Auto deployed is disabled for branch $branch by EM $key with commit hash: " . $payload['after']);
+                            \REDCap::logEvent("Auto deployed is disabled for branch $branch by EM $key with commit hash: " . $payload['after']);
+                        }
                     } else {
                         // currently we are only logging to avoid breaking the loop.
                         $this->emError("could not update EM $key in event " . $event);
@@ -381,6 +390,54 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         }
     }
 
+    /**
+     * This function will return the next instance_id in the sequence that does not currently exist.
+     * If there are no current instances, it will return 1.
+     *
+     * @param $record_id
+     * @param null $event_id
+     * @return int | false (if an error occurs)
+     */
+    public function getNextInstanceId($record_id, $event_id = null)
+    {
+        // If this is a longitudinal project, the event_id must be supplied.
+        if ($this->is_longitudinal && is_null($event_id)) {
+            $this->last_error_message = "You must supply an event_id for longitudinal projects in " . __FUNCTION__;
+            return false;
+        } else if (!$this->is_longitudinal) {
+            $event_id = $this->event_id;
+        }
+
+        // Find the last instance and add 1 to it. If there are no current instances, return 1.
+        $last_index = $this->getLastInstanceId($record_id, $event_id);
+        if (is_null($last_index)) {
+            return 1;
+        } else {
+            return ++$last_index;
+        }
+    }
+
+    private function addBuildRecord($eventId, $recordId, $sha, $timestamp, $isDeployed)
+    {
+        $data[REDCap::getRecordIdField()] = $recordId;
+
+        $data['redcap_repeat_instrument'] = 'build';
+        $data['redcap_repeat_instance'] = $this->getNextInstanceId();
+
+
+        $data['build_git_commit'] = $sha;
+        $data['build_push_to_travis'] = $isDeployed;
+
+        $data['build_created_at'] = $timestamp;
+        $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($eventId);
+        $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
+        if (empty($response['errors'])) {
+            return true;
+        } else {
+            $this->emError($response);
+            throw new \Exception("cant update last commit for EM : " . $recordId);
+        }
+    }
 
     private function shouldDeployInstance($data, $name)
     {
@@ -925,19 +982,23 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
      */
     public function triggerTravisCIBuild($branch)
     {
-        $response = $this->getClient()->getGuzzleClient()->post('https://api.travis-ci.com/repo/susom%2Fredcap-build/requests', [
-            'headers' => [
-                'Authorization' => 'token ' . $this->getProjectSetting('travis-ci-api-token'),
-                'Accept' => 'application/json',
-                'Content-Type' => 'application/json',
-                'Travis-API-Version' => '3',
-            ],
-            'body' => json_encode(array('request' => array(
-                //'branch' => $this->getDefaultREDCapBuildRepoBranch(),
-                'branch' => $branch,
-                'sha' => $this->getShaForBranchCommitForREDCapBuild($branch)
-            )))
-        ]);
+        try {
+            $response = $this->getClient()->getGuzzleClient()->post('https://api.travis-ci.com/repo/susom%2Fredcap-build/requests', [
+                'headers' => [
+                    'Authorization' => 'token ' . $this->getProjectSetting('travis-ci-api-token'),
+                    'Accept' => 'application/json',
+                    'Content-Type' => 'application/json',
+                    'Travis-API-Version' => '3',
+                ],
+                'body' => json_encode(array('request' => array(
+                    //'branch' => $this->getDefaultREDCapBuildRepoBranch(),
+                    'branch' => $branch,
+                    'sha' => $this->getShaForBranchCommitForREDCapBuild($branch)
+                )))
+            ]);
+        } catch (GuzzleException $e) {
+            echo $e->getMessage();
+        }
         $body = json_decode($response->getBody());
         echo '<pre>';
         print_r($body);

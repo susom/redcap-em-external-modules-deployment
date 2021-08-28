@@ -339,7 +339,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     public function updateREDCapRepositoryWithLastCommit($payload)
     {
 
-        // Test master remove
+        // Test  remove
         foreach ($this->getRedcapRepositories() as $recordId => $repository) {
             $key = Repository::getGithubKey($repository[$this->getFirstEventId()]['git_url']);
             if ($key == $payload['repository']['name']) {

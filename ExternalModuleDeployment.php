@@ -436,7 +436,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
 
         $data['build_commit_hash'] = $sha;
-        $data['build_push_to_travis'] = $isDeployed;
+        $data['build_push_to_travis'] = $isDeployed ? 1 : 0;
 
         $data['build_created_at'] = $timestamp;
         $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($eventId);

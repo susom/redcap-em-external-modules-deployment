@@ -1008,14 +1008,19 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                     'sha' => $this->getShaForBranchCommitForREDCapBuild($branch)
                 )))
             ]);
+            if ($response->getStatusCode() < 300) {
+                $body = json_decode($response->getBody(), true);
+                \REDCap::logEvent("Travis Build body");
+                \REDCap::logEvent(implode(',', $body));
+                $this->emLog("Travis Build body");
+                $this->emLog(implode(',', $body));
+            } else {
+                \REDCap::logEvent("Travis CI build failed. Please see Travis CI logs for more details.");
+                throw new \Exception("Travis CI build failed. Please see Travis CI logs for more details.");
+            }
         } catch (GuzzleException $e) {
             echo $e->getMessage();
         }
-        $body = json_decode($response->getBody());
-        echo '<pre>';
-        print_r($body);
-        echo '</pre>';
-
     }
 
     /**

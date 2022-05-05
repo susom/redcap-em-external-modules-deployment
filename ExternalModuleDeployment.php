@@ -383,7 +383,25 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                     }
                 }
                 // no need to go over other EM
-                break;
+                return true;
+            }
+        }
+
+        // if no redcap record found then this is a new EM lets create a record for it.
+        $data[REDCap::getRecordIdField()] = $payload['repository']['name'];
+        $data['module_name'] = $payload['repository']['name'];
+        $data['redcap_event_name'] = \REDCap::getEventNames(true, true, $this->getFirstEventId());
+        $data['git_url'] = $payload['repository']['url'];
+        $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
+        if (empty($response['errors'])) {
+            $this->emLog("new REDCap record created for " . $payload['repository']['name']);
+            \REDCap::logEvent("new REDCap record created for " . $payload['repository']['name']);
+            return true;
+        } else {
+            if (is_array($response['errors'])) {
+                throw new \Exception(implode(",", $response['errors']));
+            } else {
+                throw new \Exception($response['errors']);
             }
         }
     }

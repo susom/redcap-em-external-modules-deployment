@@ -387,21 +387,28 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             }
         }
 
-        // if no redcap record found then this is a new EM lets create a record for it.
-        $data[REDCap::getRecordIdField()] = $payload['repository']['name'];
-        $data['module_name'] = $payload['repository']['name'];
-        $data['redcap_event_name'] = \REDCap::getEventNames(true, true, $this->getFirstEventId());
-        $data['git_url'] = $payload['repository']['url'];
-        $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
-        if (empty($response['errors'])) {
-            $this->emLog("new REDCap record created for " . $payload['repository']['name']);
-            \REDCap::logEvent("new REDCap record created for " . $payload['repository']['name']);
-            return true;
-        } else {
-            if (is_array($response['errors'])) {
-                throw new \Exception(implode(",", $response['errors']));
-            } else {
-                throw new \Exception($response['errors']);
+        $key = Repository::getGithubKey($payload['repository']['url']);
+        $this->emDebug('Current Key: ', $payload);
+        $this->emDebug('Current Key: ' . $key);
+        //if no redcap record found then this is a new EM lets create a record for it.
+        foreach ($this->getGitRepositoriesDirectories() as $directory => $array) {
+            if ($array['key'] == $key) {
+                $data[REDCap::getRecordIdField()] = $payload['repository']['name'];
+                $data['module_name'] = $payload['repository']['name'];
+                $data['redcap_event_name'] = \REDCap::getEventNames(true, true, $this->getFirstEventId());
+                $data['git_url'] = $payload['repository']['url'];
+                $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
+                if (empty($response['errors'])) {
+                    $this->emLog("new REDCap record created for " . $payload['repository']['name']);
+                    \REDCap::logEvent("new REDCap record created for " . $payload['repository']['name']);
+                    return true;
+                } else {
+                    if (is_array($response['errors'])) {
+                        throw new \Exception(implode(",", $response['errors']));
+                    } else {
+                        throw new \Exception($response['errors']);
+                    }
+                }
             }
         }
     }

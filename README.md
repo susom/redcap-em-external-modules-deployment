@@ -19,11 +19,11 @@ You still need to pick the REDCap instances you want your EM deployed to. the EM
 
 By default the EM will deploy the default Github branch to the selected instances.
 
-### How to deploy other than default branch?
+### How Can I deploy other than default branch?
 
 PID 16000 has an event for each REDCap instance. If you want to deploy non-default branch to a specific instance. Under
 the instance event update `instance` form and change the value of "Override default Git Branch" with non-default branch
 name.
 
 **Current Workflow**
-![Tux, the Linux mascot](images/External%20Module%20Deployment%20Workflow.png)
+![Current Workflow](images/External%20Module%20Deployment%20Workflow.png)

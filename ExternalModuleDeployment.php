@@ -753,6 +753,8 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
             if ($repository[$this->getBranchEventId()]['git_commit']) {
                 $commit = $repository[$this->getBranchEventId()]['git_commit'];
+            } else {
+                list($branch, $commit) = $this->getRepositoryDefaultBranchLatestCommit($key, $branch);
             }
             // only write if branch and last commit different from what is saved in redcap.
             if ($repository[$this->getFirstEventId()]['deploy_version']) {
@@ -771,7 +773,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . $repository[$this->getBranchEventId()]['git_branch'] . "," . ($commit != $repository[$this->getFirstEventId()]['git_commit'] ? $commit : '') . "\n";
 //                }
 //            }
-
+            unset($commit);
         }
     }
 

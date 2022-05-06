@@ -573,6 +573,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             return array($branch, $commit);
         } catch (\GuzzleHttp\Exception\RequestException $e) {
             $this->emError("Exception pulling last commit for $key: " . $e->getMessage());
+            return [];
         }
     }
 
@@ -723,7 +724,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         $data['git_commit'] = $commit->sha;
         $data['git_branch'] = $branch;
         $data['date_of_latest_commit'] = $commit->commit->author->date;
-        $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($this->getFirstEventId());
+        $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($this->getBranchEventId());
         $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
         if (empty($response['errors'])) {
             return $commit->sha;
@@ -754,7 +755,13 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             if ($repository[$this->getBranchEventId()]['git_commit']) {
                 $commit = $repository[$this->getBranchEventId()]['git_commit'];
             } else {
-                list($branch, $commit) = $this->getRepositoryDefaultBranchLatestCommit($key, $branch);
+                list($branch, $c) = $this->getRepositoryDefaultBranchLatestCommit($key, $repository[$this->getBranchEventId()]['git_branch']);
+                if (!$c) {
+                    $this->emError("cant retrieve latest commit for $key");
+                    REDCap::logEvent("cant retrieve latest commit for $key");
+                    continue;
+                }
+                $commit = $this->updateRepositoryDefaultBranchLatestCommit($key, $recordId, $branch);
             }
             // only write if branch and last commit different from what is saved in redcap.
             if ($repository[$this->getFirstEventId()]['deploy_version']) {
@@ -770,10 +777,12 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             }
 
 
-            echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . $repository[$this->getBranchEventId()]['git_branch'] . "," . ($commit != $repository[$this->getFirstEventId()]['git_commit'] ? $commit : '') . "\n";
+            $aaaa = $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getFirstEventId()]['git_commit'] ?: $commit) . "\n";
+            echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getFirstEventId()]['git_commit'] ?: $commit) . "\n";
 //                }
 //            }
             unset($commit);
+            unset($branch);
         }
     }
 

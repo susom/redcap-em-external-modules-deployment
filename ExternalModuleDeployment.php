@@ -556,7 +556,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
      * @return array
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    public function getRepositoryDefaultBranchLatestCommit($key, $branch = ''): array
+    public function getRepositoryDefaultBranchLatestCommit($key, $branch = '')
     {
         try {
 

@@ -16,9 +16,13 @@ try {
     if (!empty($data)) {
         $module->emLog($data['repository']['name']);
 //        $payload = json_decode($data, true);
-        $module->updateREDCapRepositoryWithLastCommit($data);
+        $result = $module->updateREDCapRepositoryWithLastCommit($data);
 
-        echo json_encode(array('status' => 'success', 'message' => $data['repository']['name'] . " branch " . $module->getCommitBranch() . " was updated"));
+        if ($result) {
+            echo json_encode(array('status' => 'success', 'message' => $data['repository']['name'] . " branch " . $module->getCommitBranch() . " was updated"));
+        } else {
+            echo json_encode(array('status' => 'error', 'message' => "Could not find repo record in PID 16000.", 'data' => $data));
+        }
     } else {
         throw new \Exception("No post information found");
     }

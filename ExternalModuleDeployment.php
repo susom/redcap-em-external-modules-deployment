@@ -411,6 +411,8 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 }
             }
         }
+
+        return false;
     }
 
     /**

@@ -86,7 +86,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         // Other code to run when object is instantiated
 
         if (isset($_GET['pid']) && $this->getProjectSetting('github-installation-id') && $this->getProjectSetting('github-app-private-key')) {
-            $this->setProject(new Project(htmlentities($_GET['pid'], ENT_QUOTES)));
+            $this->setProject(new Project(htmlentities($_GET['pid'], FILTER_SANITIZE_NUMBER_INT)));
 
             if (!defined('NOAUTH') || NOAUTH == false) {
                 // get user right then set the user.
@@ -391,8 +391,8 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         }
 
         $key = Repository::getGithubKey($payload['repository']['url']);
-        $this->emDebug('Current Key: ', $payload);
-        $this->emDebug('Current Key: ' . $key);
+        $this->emLog('Current Key: ', $payload);
+        $this->emLog('Current Key: ' . $key);
         //if no redcap record found then this is a new EM lets create a record for it.
         foreach ($this->getGitRepositoriesDirectories() as $directory => $array) {
             if ($array['key'] == $key) {
@@ -595,7 +595,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 return false;
             }
         }
-        // $this->emDebug($link);
+        // $this->emLog($link);
         return $link;
     }
 
@@ -607,7 +607,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     {
         // Get all external modules enabled for the project
         $versionsByPrefix = ExternalModules::getEnabledModules($project_id);
-        $this->emDebug($versionsByPrefix);
+        $this->emLog($versionsByPrefix);
 
         // Look for any EM settings that are not active (i.e. Orphaned settings)
         $q = $this->query("select
@@ -626,7 +626,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 $orphans[$prefix] = $count;
             }
         }
-        $this->emDebug($orphans);
+        $this->emLog($orphans);
 
         // Save settings to logs for scan
         $payload = [
@@ -747,13 +747,13 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         echo "HTTP_URL,DEST,BRANCH,COMMIT\n";
         foreach ($this->getRedcapRepositories() as $recordId => $repository) {
             $key = Repository::getGithubKey($repository[$this->getFirstEventId()]['git_url']);
-            $this->emDebug('EM Key: ' . $key);
+            $this->emLog('EM Key: ' . $key);
 //            foreach ($this->getGitRepositoriesDirectories() as $directory => $array) {
 //                if ($array['key'] == $key) {
 
             $events = $this->findCommitDeploymentEventIds($repository, true);
-            $this->emDebug('Event list:');
-            $this->emDebug($events);
+            $this->emLog('Event list:');
+            $this->emLog($events);
             if (!in_array($this->getBranchEventId(), $events)) {
                 continue;
             }
@@ -782,7 +782,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 $folder = $recordId;
             }
 
-            $this->emDebug('Result: ' . $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getFirstEventId()]['git_commit'] ?: $commit) . "\n"
+            $this->emLog('Result: ' . $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getFirstEventId()]['git_commit'] ?: $commit) . "\n"
             );
             echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getFirstEventId()]['git_commit'] ?: $commit) . "\n";
 //                }
@@ -1002,7 +1002,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 //            'events' => $this->getBranchEventId()
         );
         $data = REDCap::getData($param);
-        $this->emDebug($data);
+        $this->emLog($data);
         $this->redcapRepositories = $data;
     }
 

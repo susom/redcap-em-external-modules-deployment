@@ -86,7 +86,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         // Other code to run when object is instantiated
 
         if (isset($_GET['pid']) && $this->getProjectSetting('github-installation-id') && $this->getProjectSetting('github-app-private-key')) {
-            $this->setProject(new Project(htmlentities($_GET['pid'], FILTER_SANITIZE_NUMBER_INT)));
+            $this->setProject(new Project(htmlentities($_GET['pid'], ENT_QUOTES)));
 
             if (!defined('NOAUTH') || NOAUTH == false) {
                 // get user right then set the user.

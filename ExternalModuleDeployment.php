@@ -77,13 +77,16 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
     private $client;
 
+    /**
+     * @throws \Exception
+     */
     public function __construct()
     {
         parent::__construct();
         // Other code to run when object is instantiated
 
         if (isset($_GET['pid']) && $this->getProjectSetting('github-installation-id') && $this->getProjectSetting('github-app-private-key')) {
-            $this->setProject(new Project(filter_var($_GET['pid'], FILTER_SANITIZE_STRING)));
+            $this->setProject(new Project(htmlentities($_GET['pid'], FILTER_SANITIZE_NUMBER_INT)));
 
             if (!defined('NOAUTH') || NOAUTH == false) {
                 // get user right then set the user.
@@ -383,9 +386,36 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                     }
                 }
                 // no need to go over other EM
-                break;
+                return true;
             }
         }
+
+        $key = Repository::getGithubKey($payload['repository']['url']);
+        $this->emDebug('Current Key: ', $payload);
+        $this->emDebug('Current Key: ' . $key);
+        //if no redcap record found then this is a new EM lets create a record for it.
+        foreach ($this->getGitRepositoriesDirectories() as $directory => $array) {
+            if ($array['key'] == $key) {
+                $data[REDCap::getRecordIdField()] = $payload['repository']['name'];
+                $data['module_name'] = $payload['repository']['name'];
+                $data['redcap_event_name'] = \REDCap::getEventNames(true, true, $this->getFirstEventId());
+                $data['git_url'] = $payload['repository']['url'];
+                $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
+                if (empty($response['errors'])) {
+                    $this->emLog("new REDCap record created for " . $payload['repository']['name']);
+                    \REDCap::logEvent("new REDCap record created for " . $payload['repository']['name']);
+                    return true;
+                } else {
+                    if (is_array($response['errors'])) {
+                        throw new \Exception(implode(",", $response['errors']));
+                    } else {
+                        throw new \Exception($response['errors']);
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -531,7 +561,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
      * @return array
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    public function getRepositoryDefaultBranchLatestCommit($key, $branch = ''): array
+    public function getRepositoryDefaultBranchLatestCommit($key, $branch = '')
     {
         try {
 
@@ -548,6 +578,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             return array($branch, $commit);
         } catch (\GuzzleHttp\Exception\RequestException $e) {
             $this->emError("Exception pulling last commit for $key: " . $e->getMessage());
+            return [];
         }
     }
 
@@ -698,7 +729,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         $data['git_commit'] = $commit->sha;
         $data['git_branch'] = $branch;
         $data['date_of_latest_commit'] = $commit->commit->author->date;
-        $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($this->getFirstEventId());
+        $data['redcap_event_name'] = $this->getProject()->getUniqueEventNames($this->getBranchEventId());
         $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
         if (empty($response['errors'])) {
             return $commit->sha;
@@ -728,6 +759,14 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
             if ($repository[$this->getBranchEventId()]['git_commit']) {
                 $commit = $repository[$this->getBranchEventId()]['git_commit'];
+            } else {
+                list($branch, $c) = $this->getRepositoryDefaultBranchLatestCommit($key, $repository[$this->getBranchEventId()]['git_branch']);
+                if (!$c) {
+                    $this->emError("cant retrieve latest commit for $key");
+                    REDCap::logEvent("cant retrieve latest commit for $key");
+                    continue;
+                }
+                $commit = $this->updateRepositoryDefaultBranchLatestCommit($key, $recordId, $branch);
             }
             // only write if branch and last commit different from what is saved in redcap.
             if ($repository[$this->getFirstEventId()]['deploy_version']) {
@@ -743,10 +782,12 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             }
 
 
-            echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . $repository[$this->getBranchEventId()]['git_branch'] . "," . ($commit != $repository[$this->getFirstEventId()]['git_commit'] ? $commit : '') . "\n";
+            $aaaa = $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getFirstEventId()]['git_commit'] ?: $commit) . "\n";
+            echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getFirstEventId()]['git_commit'] ?: $commit) . "\n";
 //                }
 //            }
-
+            unset($commit);
+            unset($branch);
         }
     }
 
@@ -1008,14 +1049,19 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                     'sha' => $this->getShaForBranchCommitForREDCapBuild($branch)
                 )))
             ]);
+            if ($response->getStatusCode() < 300) {
+                $body = json_decode($response->getBody(), true);
+                \REDCap::logEvent("Travis Build body");
+                \REDCap::logEvent(implode(',', $body));
+                $this->emLog("Travis Build body");
+                $this->emLog(implode(',', $body));
+            } else {
+                \REDCap::logEvent("Travis CI build failed. Please see Travis CI logs for more details.");
+                throw new \Exception("Travis CI build failed. Please see Travis CI logs for more details.");
+            }
         } catch (GuzzleException $e) {
             echo $e->getMessage();
         }
-        $body = json_decode($response->getBody());
-        echo '<pre>';
-        print_r($body);
-        echo '</pre>';
-
     }
 
     /**

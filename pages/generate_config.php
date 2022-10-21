@@ -16,7 +16,7 @@ try {
     }
     // test commit
     if (isset($_POST['branch']) && $_POST['branch'] != '') {
-        $module->setCommitBranch('', '', filter_var($_POST['branch'], FILTER_SANITIZE_STRING));
+        $module->setCommitBranch('', '', htmlentities($_POST['branch'], ENT_NOQUOTES));
 
     } else {
         // if no branch provided then use default branch from redcap-build

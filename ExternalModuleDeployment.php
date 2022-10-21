@@ -747,12 +747,13 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         echo "HTTP_URL,DEST,BRANCH,COMMIT\n";
         foreach ($this->getRedcapRepositories() as $recordId => $repository) {
             $key = Repository::getGithubKey($repository[$this->getFirstEventId()]['git_url']);
-
+            $this->emDebug('EM Key: ' . $key);
 //            foreach ($this->getGitRepositoriesDirectories() as $directory => $array) {
 //                if ($array['key'] == $key) {
 
             $events = $this->findCommitDeploymentEventIds($repository, true);
-
+            $this->emDebug('Event list:');
+            $this->emDebug($events);
             if (!in_array($this->getBranchEventId(), $events)) {
                 continue;
             }
@@ -781,8 +782,8 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 $folder = $recordId;
             }
 
-
-            $aaaa = $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getFirstEventId()]['git_commit'] ?: $commit) . "\n";
+            $this->emDebug('Result: ' . $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getFirstEventId()]['git_commit'] ?: $commit) . "\n"
+            );
             echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getFirstEventId()]['git_commit'] ?: $commit) . "\n";
 //                }
 //            }
@@ -1001,7 +1002,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 //            'events' => $this->getBranchEventId()
         );
         $data = REDCap::getData($param);
-
+        $this->emDebug($data);
         $this->redcapRepositories = $data;
     }
 

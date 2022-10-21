@@ -7,7 +7,7 @@ namespace Stanford\ExternalModuleDeployment;
 try {
 //$repos = $module->getClient()->api('current_user')->repositories();
     if (isset($_POST['repo']) && isset($_POST['command'])) {
-        $module->testGithub(filter_var($_POST['repo'], FILTER_SANITIZE_STRING), filter_var($_POST['command'], FILTER_SANITIZE_STRING));
+        $module->testGithub(htmlentities($_POST['repo'], ENT_QUOTES), htmlentities($_POST['command'], ENT_QUOTES));
     }
 
     //$module->testGithub('external-module-manager', 'collaborators');

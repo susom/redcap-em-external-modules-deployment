@@ -77,13 +77,16 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
     private $client;
 
+    /**
+     * @throws \Exception
+     */
     public function __construct()
     {
         parent::__construct();
         // Other code to run when object is instantiated
 
         if (isset($_GET['pid']) && $this->getProjectSetting('github-installation-id') && $this->getProjectSetting('github-app-private-key')) {
-            $this->setProject(new Project(filter_var($_GET['pid'], FILTER_SANITIZE_STRING)));
+            $this->setProject(new Project(htmlentities($_GET['pid'], FILTER_SANITIZE_NUMBER_INT)));
 
             if (!defined('NOAUTH') || NOAUTH == false) {
                 // get user right then set the user.

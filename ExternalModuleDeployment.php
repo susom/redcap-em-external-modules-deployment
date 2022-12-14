@@ -791,14 +791,14 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 REDCap::logEvent("Folder: $folder");
                 REDCap::logEvent("Version: $version");
                 REDCap::logEvent("Branch: $branch");
-                REDCap::logEvent("Branch: " . $repository[$this->getFirstEventId()]['git_branch']);
+                REDCap::logEvent("Branch: " . $repository[$this->getBranchEventId()]['git_branch']);
                 REDCap::logEvent("Branch: $commit");
-                REDCap::logEvent("Branch: " . $repository[$this->getFirstEventId()]['git_commit']);
-                REDCap::logEvent('Result: ' . $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getFirstEventId()]['git_commit'] ?: $commit) . "\n");
+                REDCap::logEvent("Branch: " . $repository[$this->getBranchEventId()]['git_commit']);
+                REDCap::logEvent('Result: ' . $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getBranchEventId()]['git_commit'] ?: $commit) . "\n");
 
             }
-            $this->emLog('Result: ' . $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getFirstEventId()]['git_commit'] ?: $commit) . "\n");
-            echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getFirstEventId()]['git_commit'] ?: $commit) . "\n";
+            $this->emLog('Result: ' . $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getBranchEventId()]['git_commit'] ?: $commit) . "\n");
+            echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getBranchEventId()]['git_commit'] ?: $commit) . "\n";
 //                }
 //            }
             unset($commit);

@@ -91,10 +91,14 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             if (!defined('NOAUTH') || NOAUTH == false) {
                 // get user right then set the user.
                 $right = REDCap::getUserRights();
-                $user = $right[USERID];
-                if ($user != null) {
-                    $this->setUser(new User($user));
+                // edge case when EM is called from EM manager and user is not logged in.
+                if (defined('USERID')) {
+                    $user = $right[USERID];
+                    if ($user != null) {
+                        $this->setUser(new User($user));
+                    }
                 }
+
 
             }
 

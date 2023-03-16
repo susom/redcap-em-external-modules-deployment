@@ -1,104 +1,113 @@
 {
-    "name": "ExternalModuleDeployment",
-    "namespace": "Stanford\\ExternalModuleDeployment",
-    "description": "Manage External Modules and Deployments",
-    "documentation": "README.md",
-    "framework-version": 6,
-    "authors": [
-        {
-            "name": "Andrew Martin",
-            "email": "andy123@stanford.edu",
-            "institution": "Stanford University"
-        },
-        {
-            "name": "Ihab Zeedia",
-            "email": "ihabz@stanford.edu",
-            "institution": "Stanford University"
-        }
-    ],
-    "permissions": [
-        "redcap_module_link_check_display",
-        "redcap_save_record"
-    ],
-    "enable-every-page-hooks-on-system-pages": false,
-    "links": {
-        "project": [
-            {
-                "name": "EM Deployment Test Page",
-                "icon": "fas fa-donate",
-                "url": "pages/github_test.php",
-                "show-header-and-footer": true
-            }
-        ],
-        "control-center": [
-        ]
+  "name": "ExternalModuleDeployment",
+  "namespace": "Stanford\\ExternalModuleDeployment",
+  "description": "Manage External Modules and Deployments",
+  "documentation": "README.md",
+  "framework-version": 6,
+  "authors": [
+    {
+      "name": "Andrew Martin",
+      "email": "andy123@stanford.edu",
+      "institution": "Stanford University"
     },
-    "no-auth-pages": [
-        "pages/webhook",
-        "pages/generate_config"
-    ],
-    "project-settings": [
-        {
-            "key": "github-app-id",
-            "name": "set Github App ID<b>",
-            "required": true,
-            "type": "text"
-        },
-        {
-            "key": "github-installation-id",
-            "name": "set Github Installation ID<b>",
-            "required": true,
-            "type": "text"
-        },
-        {
-            "key": "github-app-private-key",
-            "name": "Add Github App private Key<b>",
-            "required": true,
-            "type": "textarea"
-        },
-        {
-            "key": "github-webhook-secret",
-            "name": "Add Github Webhook Secret<b>",
-            "required": true,
-            "type": "text"
-        },
-        {
-            "key": "redcap-build-github-repo",
-            "name": "Add SSH URL for REDCap build Github Repository<b>",
-            "required": true,
-            "type": "text"
-        },
-        {
-            "key": "travis-ci-api-token",
-            "name": "Add Travis CI API token to trigger build with each commit.<b>",
-            "required": true,
-            "type": "text"
-        },
-        {
-            "key": "travis-config-secret",
-            "name": "generate random secret to verify Travis CI requests to generate config.csv.<b>",
-            "required": true,
-            "type": "text"
-        },
-        {
-            "key": "enable-project-debug-logging",
-            "name": "<b>Enable Debug Logging</b><br><i>(optional)</i> Requires installation and configuration of emLogger",
-            "required": false,
-            "type": "checkbox"
-        }
-    ],
-    "system-settings": [
-        {
-            "key": "enable-system-debug-logging",
-            "name": "<b>Enable Debug Logging (system-wide)</b><i>(optional)</i> Requires installation and configuration of emLogger",
-            "required": false,
-            "type": "checkbox"
-        }
-    ],
-    "compatibility": {
-        "php-version-min": "",
-        "php-version-max": "",
-        "redcap-version-min": "",
-        "redcap-version-max": ""
+    {
+      "name": "Ihab Zeedia",
+      "email": "ihabz@stanford.edu",
+      "institution": "Stanford University"
     }
+  ],
+  "permissions": [
+    "redcap_module_link_check_display",
+    "redcap_save_record"
+  ],
+  "enable-every-page-hooks-on-system-pages": false,
+  "links": {
+    "project": [
+      {
+        "name": "EM Deployment Test Page",
+        "icon": "fas fa-donate",
+        "url": "pages/github_test.php",
+        "show-header-and-footer": true
+      }
+    ],
+    "control-center": [
+    ]
+  },
+  "no-auth-pages": [
+    "pages/webhook",
+    "pages/generate_config"
+  ],
+  "project-settings": [
+    {
+      "key": "github-app-id",
+      "name": "set Github App ID<b>",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "key": "github-installation-id",
+      "name": "set Github Installation ID<b>",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "key": "github-app-private-key",
+      "name": "Add Github App private Key<b>",
+      "required": true,
+      "type": "textarea"
+    },
+    {
+      "key": "github-webhook-secret",
+      "name": "Add Github Webhook Secret<b>",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "key": "redcap-build-github-repo",
+      "name": "Add SSH URL for REDCap build Github Repository<b>",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "key": "travis-ci-api-token",
+      "name": "Add Travis CI API token to trigger build with each commit.<b>",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "key": "travis-config-secret",
+      "name": "generate random secret to verify Travis CI requests to generate config.csv.<b>",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "key": "enable-project-debug-logging",
+      "name": "<b>Enable Debug Logging</b><br><i>(optional)</i> Requires installation and configuration of emLogger",
+      "required": false,
+      "type": "checkbox"
+    }
+  ],
+  "system-settings": [
+    {
+      "key": "enable-system-debug-logging",
+      "name": "<b>Enable Debug Logging (system-wide)</b><i>(optional)</i> Requires installation and configuration of emLogger",
+      "required": false,
+      "type": "checkbox"
+    }
+  ],
+  "crons": [
+    {
+      "cron_name": "sync_ems_commits",
+      "cron_description": "This daily cron will make sure all commits saved in PID 16000 are up to date with github. ",
+      "method": "syncExternalModulesCommits",
+      "cron_frequency": "86400",
+      "cron_max_run_time": "3600"
+    }
+  ],
+  "compatibility": {
+    "php-version-min": "",
+    "php-version-max": "",
+    "redcap-version-min": "",
+    "redcap-version-max": ""
+  }
 }

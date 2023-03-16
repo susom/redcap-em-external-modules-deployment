@@ -164,7 +164,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             $this->setRepository(new Repository($this->getClient(), $data));
             if ($data[$record][$event_id]['git_url'] != '') {
                 $key = Repository::getGithubKey($data[$record][$event_id]['git_url']);
-                list($commitBranch, $commit) = $this->getRepositoryDefaultBranchLatestCommit($key);
+                list($commitBranch, $commit) = $this->getRepositoryBranchLatestCommit($key);
 
                 $events = $this->findCommitDeploymentEventIds($data[$record], true);
 
@@ -565,7 +565,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
      * @return array
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    public function getRepositoryDefaultBranchLatestCommit($key, $branch = '')
+    public function getRepositoryBranchLatestCommit($key, $branch = '')
     {
         try {
 
@@ -728,7 +728,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
      */
     public function updateRepositoryDefaultBranchLatestCommit($key, $recordId, $branch = ''): string
     {
-        list($branch, $commit) = $this->getRepositoryDefaultBranchLatestCommit($key, $branch);
+        list($branch, $commit) = $this->getRepositoryBranchLatestCommit($key, $branch);
         $data[REDCap::getRecordIdField()] = $recordId;
         $data['git_commit'] = $commit->sha;
         $data['git_branch'] = $branch;
@@ -765,7 +765,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             if ($repository[$this->getBranchEventId()]['git_commit']) {
                 $commit = $repository[$this->getBranchEventId()]['git_commit'];
             } else {
-                list($branch, $c) = $this->getRepositoryDefaultBranchLatestCommit($key, $repository[$this->getBranchEventId()]['git_branch']);
+                list($branch, $c) = $this->getRepositoryBranchLatestCommit($key, $repository[$this->getBranchEventId()]['git_branch']);
                 if (!$c) {
                     $this->emError("cant retrieve latest commit for $key");
                     REDCap::logEvent("cant retrieve latest commit for $key");
@@ -1258,5 +1258,47 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         $this->client = $client;
     }
 
+    /**
+     * this daily cron will sync PID 16000 commits with Github.
+     * @return void
+     * @throws GuzzleException
+     */
+    public function syncExternalModulesCommits()
+    {
+        foreach ($this->getRedcapRepositories() as $recordId => $repository) {
+            $key = Repository::getGithubKey($repository[$this->getFirstEventId()]['git_url']);
+            if (!$key) {
+                continue;
+            }
+            $this->emLog('EM Key: ' . $key);
+
+            $options = parseEnum($this->getProject()->metadata['deploy']['element_enum']);
+            $deployments = $repository[$this->getFirstEventId()]['deploy'];
+            foreach ($deployments as $name => $deployment) {
+                if (!$deployment) {
+                    continue;
+                }
+
+                $eventId = $this->searchEventViaDescription($options[$name]);
+                $branch = $repository[$eventId]['git_branch'];
+                $commit = $repository[$eventId]['git_commit'];
+                list($branch, $latestCommit) = $this->getRepositoryBranchLatestCommit($key, $branch);
+                // check what is in github and what we have in redcap.
+                if ($latestCommit->sha != $commit) {
+                    $data[\REDCap::getRecordIdField()] = $recordId;
+                    $data['git_commit'] = $latestCommit->sha;
+                    $data['redcap_event_name'] = \REDCap::getEventNames(true, true, $eventId);
+                    $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
+                    if (!empty($response['errors'])) {
+                        $this->emError($response['errors']);
+                    } else {
+                        $this->emLog("$key commits was synced with Github!");
+                    }
+                } else {
+                    $this->emLog("$key commits is up to date with Github. No changes are done.");
+                }
+            }
+        }
+    }
 
 }

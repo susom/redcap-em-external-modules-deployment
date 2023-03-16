@@ -10,7 +10,7 @@ try {
         $module->testGithub(htmlentities($_POST['repo'], ENT_QUOTES), htmlentities($_POST['command'], ENT_QUOTES));
     }
 
-    //$module->testGithub('external-module-manager', 'collaborators');
+    $module->syncExternalModulesCommits();
 
 
     ?>

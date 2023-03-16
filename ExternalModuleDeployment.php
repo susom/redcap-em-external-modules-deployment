@@ -1304,9 +1304,10 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
     public function syncExternalModulesCommits()
     {
+        $client = new \GuzzleHttp\Client();
         $id = $this->getSystemSetting('em-project-id');
         $url = $this->getUrl("ajax/sync_commits.php", true) . '&pid=' . $id;
-        $this->getClient()->getGuzzleClient()->request('GET', $url, array(\GuzzleHttp\RequestOptions::SYNCHRONOUS => true));
+        $client->request('GET', $url, array(\GuzzleHttp\RequestOptions::SYNCHRONOUS => true));
         $this->emDebug("running cron for $url on project " . $id);
     }
 

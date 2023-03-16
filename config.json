@@ -34,6 +34,7 @@
     ]
   },
   "no-auth-pages": [
+    "ajax/sync_commits",
     "pages/webhook",
     "pages/generate_config"
   ],

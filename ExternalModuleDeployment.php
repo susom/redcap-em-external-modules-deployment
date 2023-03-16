@@ -85,7 +85,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         parent::__construct();
         // Other code to run when object is instantiated
 
-        if (isset($_GET['pid']) && $this->getProjectSetting('github-installation-id') && $this->getProjectSetting('github-app-private-key')) {
+        if (isset($_GET['pid']) && $_GET['pid'] != '' && $this->getProjectSetting('github-installation-id') && $this->getProjectSetting('github-app-private-key')) {
             $this->setProject(new Project(htmlentities($_GET['pid'], FILTER_SANITIZE_NUMBER_INT)));
 
             if (!defined('NOAUTH') || NOAUTH == false) {
@@ -1006,12 +1006,12 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     }
 
     /**
-     * @param array $redcapRepositories
+     * @param int $projectId
      */
-    public function setRedcapRepositories(): void
+    public function setRedcapRepositories($projectId = ''): void
     {
         $param = array(
-            'project_id' => $this->getProjectId(),
+            'project_id' => $projectId ?: $this->getProjectId(),
             'return_format' => 'array',
 //            'events' => $this->getBranchEventId()
         );
@@ -1265,6 +1265,8 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
      */
     public function syncExternalModulesCommits()
     {
+        // workaround to set pid for EM manager project.
+        $this->setRedcapRepositories($this->getSystemSetting('em-project-id'));
         foreach ($this->getRedcapRepositories() as $recordId => $repository) {
             $key = Repository::getGithubKey($repository[$this->getFirstEventId()]['git_url']);
             if (!$key) {

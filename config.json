@@ -89,6 +89,12 @@
   ],
   "system-settings": [
     {
+      "key": "em-project-id",
+      "name": "Project contains EM records",
+      "required": true,
+      "type": "project-id"
+    },
+    {
       "key": "enable-system-debug-logging",
       "name": "<b>Enable Debug Logging (system-wide)</b><i>(optional)</i> Requires installation and configuration of emLogger",
       "required": false,

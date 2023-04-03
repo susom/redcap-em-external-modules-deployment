@@ -162,7 +162,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         if ($event_id == $this->getFirstEventId()) {
 
             $this->setRepository(new Repository($this->getClient(), $data));
-            if ($data[$record][$event_id]['git_url'] != '') {
+            if ($data[$record][$event_id]['git_url'] != '' && $data[$record][$event_id]['stanford_module'] == '1') {
                 $key = Repository::getGithubKey($data[$record][$event_id]['git_url']);
                 list($commitBranch, $commit) = $this->getRepositoryBranchLatestCommit($key);
 
@@ -213,6 +213,12 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                             \REDCap::logEvent("could not update EM $key in event " . $event);
                         }
                     }
+                }
+                // if module not stanford use release zip file if exists.
+            } elseif ($data[$record][$event_id]['module_release_url'] != '') {
+                $events = $this->findCommitDeploymentEventIds($data[$record], true);
+                foreach ($events as $branch => $event) {
+                    $this->triggerTravisCIBuild($branch);
                 }
             }
         } else {
@@ -748,7 +754,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
      */
     public function generateREDCapBuildConfigCSV()
     {
-        echo "HTTP_URL,DEST,BRANCH,COMMIT\n";
+        echo "HTTP_URL,DEST,BRANCH,COMMIT,RELEASE\n";
         foreach ($this->getRedcapRepositories() as $recordId => $repository) {
             $key = Repository::getGithubKey($repository[$this->getFirstEventId()]['git_url']);
             $this->emLog('EM Key: ' . $key);
@@ -786,19 +792,14 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             } else {
                 $folder = $recordId;
             }
+            $release = '';
+            if ($repository[$this->getFirstEventId()]['module_release_url'] != '') {
+                $release = $repository[$this->getFirstEventId()]['module_release_url'];
+                echo ",,,," . $release . "\n";
 
-            if ($key == 'redcap-em-external-modules-deployment') {
-                REDCap::logEvent("Folder: $folder");
-                REDCap::logEvent("Version: $version");
-                REDCap::logEvent("Branch: $branch");
-                REDCap::logEvent("Branch: " . $repository[$this->getBranchEventId()]['git_branch']);
-                REDCap::logEvent("Branch: $commit");
-                REDCap::logEvent("Branch: " . $repository[$this->getBranchEventId()]['git_commit']);
-                REDCap::logEvent('Result: ' . $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getBranchEventId()]['git_commit'] ?: $commit) . "\n");
-
+            } else {
+                echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getBranchEventId()]['git_commit'] ?: $commit) . ",\n";
             }
-            $this->emLog('Result: ' . $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getBranchEventId()]['git_commit'] ?: $commit) . "\n");
-            echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getBranchEventId()]['git_commit'] ?: $commit) . "\n";
 //                }
 //            }
             unset($commit);

@@ -216,9 +216,12 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 }
                 // if module not stanford use release zip file if exists.
             } elseif ($data[$record][$event_id]['module_release_url'] != '') {
-                $events = $this->findCommitDeploymentEventIds($data[$record], true);
-                foreach ($events as $branch => $event) {
-                    $this->triggerTravisCIBuild($branch);
+                $deployments = $data[$record][$this->getFirstEventId()]['deploy'];
+                foreach ($deployments as $branch => $value) {
+                    if ($value) {
+                        $this->triggerTravisCIBuild($branch);
+                    }
+
                 }
             }
         } else {

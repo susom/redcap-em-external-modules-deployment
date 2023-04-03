@@ -792,10 +792,10 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             } else {
                 $folder = $recordId;
             }
-            $release = '';
+            // if a release is set use it to pull EM files.
             if ($repository[$this->getFirstEventId()]['module_release_url'] != '') {
                 $release = $repository[$this->getFirstEventId()]['module_release_url'];
-                echo ",,,," . $release . "\n";
+                echo ",$folder" . "_v$version,,," . $release . "\n";
 
             } else {
                 echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getBranchEventId()]['git_commit'] ?: $commit) . ",\n";

@@ -170,7 +170,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
                 if (!empty($events)) {
                     foreach ($events as $branch => $event) {
-
+                        $autoDeploy = $data[$record][$event]['auto_deploy'];
                         if (!$this->canUpdateEvent($event, $commitBranch, $data[$record], $commit)) {
 
                             // lets get non-default branch commit and compare it to what is saved in redcap
@@ -180,7 +180,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                             $deploy_instance = $data[$record][$event]['deploy_instance']["1"];
 
                             // we need to update because here
-                            if ($this->updateInstanceCommitInformation($event, $record, $key, $nonDefaultCommit->sha, $nonDefaultCommit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $nonDefaultBranch)) {
+                            if ($this->updateInstanceCommitInformation($event, $record, $key, $nonDefaultCommit->sha, $nonDefaultCommit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $nonDefaultBranch, $autoDeploy)) {
                                 // if the deploy_instace changed then trigger travis
                                 if ($deploy_instance != $this->shouldDeployInstance($data[$record], $branch)) {
                                     $this->triggerTravisCIBuild($branch);
@@ -196,7 +196,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                             continue;
                         }
 
-                        if ($this->updateInstanceCommitInformation($event, $record, $key, $commit->sha, $commit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $commitBranch)) {
+                        if ($this->updateInstanceCommitInformation($event, $record, $key, $commit->sha, $commit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $commitBranch, $autoDeploy)) {
                             if ($this->isCommitChanged($data[$event]['git_commit'], $commit->sha)) {
                                 $this->triggerTravisCIBuild($branch);
                                 $this->emLog(USERID . "Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $commit->sha);
@@ -237,7 +237,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             $branch = $this->searchBranchNameViaEventId($event_id);
             // if commit are different between
             if ($this->isCommitChanged($data[$record][$event_id]['git_commit'], $commit->sha)) {
-                if ($this->updateInstanceCommitInformation($event_id, $record, $key, $commit->sha, $commit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $commitBranch)) {
+                if ($this->updateInstanceCommitInformation($event_id, $record, $key, $commit->sha, $commit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $commitBranch, $data[$record][$event_id]['auto_deploy'])) {
                     $this->triggerTravisCIBuild($branch);
                     $this->emLog("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $commit->sha);
                     \REDCap::logEvent("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $commit->sha);
@@ -386,7 +386,8 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
                     $this->addBuildRecord($event, $recordId, $payload['after'], $commit['timestamp'], $canBuild);
 
-                    if ($canBuild && $this->updateInstanceCommitInformation($event, $recordId, $payload['repository']['name'], $payload['after'], $commit['timestamp'], $this->shouldDeployInstance($repository, $branch))) {
+                    $dataSaved = $this->updateInstanceCommitInformation($event, $recordId, $payload['repository']['name'], $payload['after'], $commit['timestamp'], $this->shouldDeployInstance($repository, $branch), $canBuild);
+                    if ($canBuild && $dataSaved) {
 
                         $this->triggerTravisCIBuild($branch);
                         $this->emLog("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $payload['after']);
@@ -510,7 +511,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
      * @return bool
      * @throws \Exception
      */
-    public function updateInstanceCommitInformation($eventId, $recordId, $name, $after, $timestamp, $deploy_instance, $branch = ''): bool
+    public function updateInstanceCommitInformation($eventId, $recordId, $name, $after, $timestamp, $deploy_instance, $branch = '', $autoDeploy = false): bool
     {
         $data[REDCap::getRecordIdField()] = $recordId;
         if ($branch == '') {
@@ -519,7 +520,14 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             $data['git_branch'] = $branch;
         }
 
-        $data['git_commit'] = $after;
+        // update latest commit field
+        $data['git_commit_latest'] = $after;
+
+        // if we can auto_deploy for current event deploy it.
+        if($autoDeploy){
+            $data['git_commit'] = $after;
+        }
+
         if ($deploy_instance) {
             $data['deploy_instance___1'] = 1;
         } else {

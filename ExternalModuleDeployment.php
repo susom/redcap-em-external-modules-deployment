@@ -386,7 +386,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
                     $this->addBuildRecord($event, $recordId, $payload['after'], $commit['timestamp'], $canBuild);
 
-                    $dataSaved = $this->updateInstanceCommitInformation($event, $recordId, $payload['repository']['name'], $payload['after'], $commit['timestamp'], $this->shouldDeployInstance($repository, $branch), $canBuild);
+                    $dataSaved = $this->updateInstanceCommitInformation($event, $recordId, $payload['repository']['name'], $payload['after'], $commit['timestamp'], $this->shouldDeployInstance($repository, $branch), $commitBranch, $canBuild);
                     if ($canBuild && $dataSaved) {
 
                         $this->triggerTravisCIBuild($branch);
@@ -524,7 +524,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         $data['git_commit_latest'] = $after;
 
         // if we can auto_deploy for current event deploy it.
-        if($autoDeploy){
+        if ($autoDeploy) {
             $data['git_commit'] = $after;
         }
 
@@ -779,16 +779,19 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 continue;
             }
 
-            if ($repository[$this->getBranchEventId()]['git_commit']) {
-                $commit = $repository[$this->getBranchEventId()]['git_commit'];
-            } else {
-                list($branch, $c) = $this->getRepositoryBranchLatestCommit($key, $repository[$this->getBranchEventId()]['git_branch']);
-                if (!$c) {
-                    $this->emError("cant retrieve latest commit for $key");
-                    REDCap::logEvent("cant retrieve latest commit for $key");
-                    continue;
+            // no need to get commits for releases.
+            if (!$repository[$this->getFirstEventId()]['module_release_url']) {
+                if ($repository[$this->getBranchEventId()]['git_commit']) {
+                    $commit = $repository[$this->getBranchEventId()]['git_commit'];
+                } else {
+                    list($branch, $c) = $this->getRepositoryBranchLatestCommit($key, $repository[$this->getBranchEventId()]['git_branch']);
+                    if (!$c) {
+                        $this->emError("cant retrieve latest commit for $key");
+                        REDCap::logEvent("cant retrieve latest commit for $key");
+                        continue;
+                    }
+                    $commit = $this->updateRepositoryDefaultBranchLatestCommit($key, $recordId, $branch);
                 }
-                $commit = $this->updateRepositoryDefaultBranchLatestCommit($key, $recordId, $branch);
             }
             // only write if branch and last commit different from what is saved in redcap.
             if ($repository[$this->getFirstEventId()]['deploy_version']) {

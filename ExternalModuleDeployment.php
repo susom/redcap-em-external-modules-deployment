@@ -768,7 +768,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         echo "HTTP_URL,DEST,BRANCH,COMMIT,RELEASE\n";
         foreach ($this->getRedcapRepositories() as $recordId => $repository) {
             $key = Repository::getGithubKey($repository[$this->getFirstEventId()]['git_url']);
-            $this->emLog('EM Key: ' . $key);
+            //$this->emLog('EM Key: ' . $key);
 //            foreach ($this->getGitRepositoriesDirectories() as $directory => $array) {
 //                if ($array['key'] == $key) {
 

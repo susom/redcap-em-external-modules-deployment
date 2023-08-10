@@ -405,7 +405,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         }
 
         $key = Repository::getGithubKey($payload['repository']['url']);
-        $this->emLog('Current Key: ', $payload);
+        //$this->emLog('Current Key: ', $payload);
         $this->emLog('Current Key: ' . $key);
         //if no redcap record found then this is a new EM lets create a record for it.
         foreach ($this->getGitRepositoriesDirectories() as $directory => $array) {
@@ -773,8 +773,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 //                if ($array['key'] == $key) {
 
             $events = $this->findCommitDeploymentEventIds($repository, true);
-            $this->emLog('Event list:');
-            $this->emLog($events);
+            //$this->emLog($events);
             if (!in_array($this->getBranchEventId(), $events)) {
                 continue;
             }
@@ -1031,7 +1030,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 //            'events' => $this->getBranchEventId()
         );
         $data = REDCap::getData($param);
-        $this->emLog($data);
+        //$this->emLog($data);
         $this->redcapRepositories = $data;
     }
 
@@ -1084,7 +1083,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 \REDCap::logEvent("Travis Build body");
                 \REDCap::logEvent(implode(',', $body));
                 $this->emLog("Travis Build body");
-                $this->emLog(implode(',', $body));
+                //$this->emLog(implode(',', $body));
             } else {
                 \REDCap::logEvent("Travis CI build failed. Please see Travis CI logs for more details.");
                 throw new \Exception("Travis CI build failed. Please see Travis CI logs for more details.");

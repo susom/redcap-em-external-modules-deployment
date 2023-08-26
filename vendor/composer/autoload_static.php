@@ -6,21 +6,21 @@ namespace Composer\Autoload;
 
 class ComposerStaticInitc63780bc37518e81f992e9c8c9ff2181
 {
-    public static $prefixLengthsPsr4 = array(
-        'F' =>
-            array(
-                'Firebase\\JWT\\' => 13,
-            ),
+    public static $prefixLengthsPsr4 = array (
+        'F' => 
+        array (
+            'Firebase\\JWT\\' => 13,
+        ),
     );
 
-    public static $prefixDirsPsr4 = array(
-        'Firebase\\JWT\\' =>
-            array(
-                0 => __DIR__ . '/..' . '/firebase/php-jwt/src',
-            ),
+    public static $prefixDirsPsr4 = array (
+        'Firebase\\JWT\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/firebase/php-jwt/src',
+        ),
     );
 
-    public static $classMap = array(
+    public static $classMap = array (
         'Composer\\InstalledVersions' => __DIR__ . '/..' . '/composer/InstalledVersions.php',
     );
 

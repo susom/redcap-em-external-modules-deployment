@@ -666,7 +666,8 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
     public function testGithub($key, $command = '')
     {
-        $response = $this->getClient()->get('https://api.github.com/repos/susom/' . $key . ($command ? '/' . $command : ''), [
+        $client = new \GuzzleHttp\Client();
+        $response = $client->get('https://api.github.com/repos/susom/' . $key . ($command ? '/' . $command : ''), [
             'headers' => [
                 'Authorization' => 'token ' . $this->getClient()->getAccessToken(),
                 'Accept' => 'application/vnd.github.v3+json'

@@ -85,7 +85,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         parent::__construct();
         // Other code to run when object is instantiated
 
-        if (isset($_GET['pid']) && $this->getProjectSetting('github-installation-id') && $this->getProjectSetting('github-app-private-key')) {
+        if (isset($_GET['pid']) && $_GET['pid'] != '' && $this->getProjectSetting('github-installation-id') && $this->getProjectSetting('github-app-private-key')) {
             $this->setProject(new Project(htmlentities($_GET['pid'], FILTER_SANITIZE_NUMBER_INT)));
 
             if (!defined('NOAUTH') || NOAUTH == false) {
@@ -162,15 +162,15 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         if ($event_id == $this->getFirstEventId()) {
 
             $this->setRepository(new Repository($this->getClient(), $data));
-            if ($data[$record][$event_id]['git_url'] != '') {
+            if ($data[$record][$event_id]['git_url'] != '' && $data[$record][$event_id]['stanford_module'] == '1') {
                 $key = Repository::getGithubKey($data[$record][$event_id]['git_url']);
-                list($commitBranch, $commit) = $this->getRepositoryDefaultBranchLatestCommit($key);
+                list($commitBranch, $commit) = $this->getRepositoryBranchLatestCommit($key);
 
                 $events = $this->findCommitDeploymentEventIds($data[$record], true);
 
                 if (!empty($events)) {
                     foreach ($events as $branch => $event) {
-
+                        $autoDeploy = $data[$record][$event]['auto_deploy'];
                         if (!$this->canUpdateEvent($event, $commitBranch, $data[$record], $commit)) {
 
                             // lets get non-default branch commit and compare it to what is saved in redcap
@@ -180,7 +180,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                             $deploy_instance = $data[$record][$event]['deploy_instance']["1"];
 
                             // we need to update because here
-                            if ($this->updateInstanceCommitInformation($event, $record, $key, $nonDefaultCommit->sha, $nonDefaultCommit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $nonDefaultBranch)) {
+                            if ($this->updateInstanceCommitInformation($event, $record, $key, $nonDefaultCommit->sha, $nonDefaultCommit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $nonDefaultBranch, $autoDeploy)) {
                                 // if the deploy_instace changed then trigger travis
                                 if ($deploy_instance != $this->shouldDeployInstance($data[$record], $branch)) {
                                     $this->triggerTravisCIBuild($branch);
@@ -196,7 +196,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                             continue;
                         }
 
-                        if ($this->updateInstanceCommitInformation($event, $record, $key, $commit->sha, $commit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $commitBranch)) {
+                        if ($this->updateInstanceCommitInformation($event, $record, $key, $commit->sha, $commit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $commitBranch, $autoDeploy)) {
                             if ($this->isCommitChanged($data[$event]['git_commit'], $commit->sha)) {
                                 $this->triggerTravisCIBuild($branch);
                                 $this->emLog(USERID . "Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $commit->sha);
@@ -214,6 +214,15 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                         }
                     }
                 }
+                // if module not stanford use release zip file if exists.
+            } elseif ($data[$record][$event_id]['module_release_url'] != '') {
+                $deployments = $data[$record][$this->getFirstEventId()]['deploy'];
+                foreach ($deployments as $branch => $value) {
+                    if ($value) {
+                        $this->triggerTravisCIBuild($branch);
+                    }
+
+                }
             }
         } else {
             // handle saving instance
@@ -228,7 +237,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             $branch = $this->searchBranchNameViaEventId($event_id);
             // if commit are different between
             if ($this->isCommitChanged($data[$record][$event_id]['git_commit'], $commit->sha)) {
-                if ($this->updateInstanceCommitInformation($event_id, $record, $key, $commit->sha, $commit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $commitBranch)) {
+                if ($this->updateInstanceCommitInformation($event_id, $record, $key, $commit->sha, $commit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $commitBranch, $data[$record][$event_id]['auto_deploy'])) {
                     $this->triggerTravisCIBuild($branch);
                     $this->emLog("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $commit->sha);
                     \REDCap::logEvent("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $commit->sha);
@@ -377,7 +386,8 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
                     $this->addBuildRecord($event, $recordId, $payload['after'], $commit['timestamp'], $canBuild);
 
-                    if ($canBuild && $this->updateInstanceCommitInformation($event, $recordId, $payload['repository']['name'], $payload['after'], $commit['timestamp'], $this->shouldDeployInstance($repository, $branch))) {
+                    $dataSaved = $this->updateInstanceCommitInformation($event, $recordId, $payload['repository']['name'], $payload['after'], $commit['timestamp'], $this->shouldDeployInstance($repository, $branch), $commitBranch, $canBuild);
+                    if ($canBuild && $dataSaved) {
 
                         $this->triggerTravisCIBuild($branch);
                         $this->emLog("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $payload['after']);
@@ -395,7 +405,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         }
 
         $key = Repository::getGithubKey($payload['repository']['url']);
-        $this->emLog('Current Key: ', $payload);
+        //$this->emLog('Current Key: ', $payload);
         $this->emLog('Current Key: ' . $key);
         //if no redcap record found then this is a new EM lets create a record for it.
         foreach ($this->getGitRepositoriesDirectories() as $directory => $array) {
@@ -501,7 +511,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
      * @return bool
      * @throws \Exception
      */
-    public function updateInstanceCommitInformation($eventId, $recordId, $name, $after, $timestamp, $deploy_instance, $branch = ''): bool
+    public function updateInstanceCommitInformation($eventId, $recordId, $name, $after, $timestamp, $deploy_instance, $branch = '', $autoDeploy = false): bool
     {
         $data[REDCap::getRecordIdField()] = $recordId;
         if ($branch == '') {
@@ -510,7 +520,14 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             $data['git_branch'] = $branch;
         }
 
-        $data['git_commit'] = $after;
+        // update latest commit field
+        $data['git_commit_latest'] = $after;
+
+        // if we can auto_deploy for current event deploy it.
+        if ($autoDeploy) {
+            $data['git_commit'] = $after;
+        }
+
         if ($deploy_instance) {
             $data['deploy_instance___1'] = 1;
         } else {
@@ -565,7 +582,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
      * @return array
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    public function getRepositoryDefaultBranchLatestCommit($key, $branch = '')
+    public function getRepositoryBranchLatestCommit($key, $branch = '')
     {
         try {
 
@@ -728,7 +745,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
      */
     public function updateRepositoryDefaultBranchLatestCommit($key, $recordId, $branch = ''): string
     {
-        list($branch, $commit) = $this->getRepositoryDefaultBranchLatestCommit($key, $branch);
+        list($branch, $commit) = $this->getRepositoryBranchLatestCommit($key, $branch);
         $data[REDCap::getRecordIdField()] = $recordId;
         $data['git_commit'] = $commit->sha;
         $data['git_branch'] = $branch;
@@ -748,30 +765,32 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
      */
     public function generateREDCapBuildConfigCSV()
     {
-        echo "HTTP_URL,DEST,BRANCH,COMMIT\n";
+        echo "HTTP_URL,DEST,BRANCH,COMMIT,RELEASE\n";
         foreach ($this->getRedcapRepositories() as $recordId => $repository) {
             $key = Repository::getGithubKey($repository[$this->getFirstEventId()]['git_url']);
-            $this->emLog('EM Key: ' . $key);
+            //$this->emLog('EM Key: ' . $key);
 //            foreach ($this->getGitRepositoriesDirectories() as $directory => $array) {
 //                if ($array['key'] == $key) {
 
             $events = $this->findCommitDeploymentEventIds($repository, true);
-            $this->emLog('Event list:');
-            $this->emLog($events);
+            //$this->emLog($events);
             if (!in_array($this->getBranchEventId(), $events)) {
                 continue;
             }
 
-            if ($repository[$this->getBranchEventId()]['git_commit']) {
-                $commit = $repository[$this->getBranchEventId()]['git_commit'];
-            } else {
-                list($branch, $c) = $this->getRepositoryDefaultBranchLatestCommit($key, $repository[$this->getBranchEventId()]['git_branch']);
-                if (!$c) {
-                    $this->emError("cant retrieve latest commit for $key");
-                    REDCap::logEvent("cant retrieve latest commit for $key");
-                    continue;
+            // no need to get commits for releases.
+            if (!$repository[$this->getFirstEventId()]['module_release_url']) {
+                if ($repository[$this->getBranchEventId()]['git_commit']) {
+                    $commit = $repository[$this->getBranchEventId()]['git_commit'];
+                } else {
+                    list($branch, $c) = $this->getRepositoryBranchLatestCommit($key, $repository[$this->getBranchEventId()]['git_branch']);
+                    if (!$c) {
+                        $this->emError("cant retrieve latest commit for $key");
+                        REDCap::logEvent("cant retrieve latest commit for $key");
+                        continue;
+                    }
+                    $commit = $this->updateRepositoryDefaultBranchLatestCommit($key, $recordId, $branch);
                 }
-                $commit = $this->updateRepositoryDefaultBranchLatestCommit($key, $recordId, $branch);
             }
             // only write if branch and last commit different from what is saved in redcap.
             if ($repository[$this->getFirstEventId()]['deploy_version']) {
@@ -786,19 +805,14 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             } else {
                 $folder = $recordId;
             }
+            // if a release is set use it to pull EM files.
+            if ($repository[$this->getFirstEventId()]['module_release_url'] != '') {
+                $release = $repository[$this->getFirstEventId()]['module_release_url'];
+                echo ",$folder" . "_v$version,,," . $release . "\n";
 
-            if ($key == 'redcap-em-external-modules-deployment') {
-                REDCap::logEvent("Folder: $folder");
-                REDCap::logEvent("Version: $version");
-                REDCap::logEvent("Branch: $branch");
-                REDCap::logEvent("Branch: " . $repository[$this->getBranchEventId()]['git_branch']);
-                REDCap::logEvent("Branch: $commit");
-                REDCap::logEvent("Branch: " . $repository[$this->getBranchEventId()]['git_commit']);
-                REDCap::logEvent('Result: ' . $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getBranchEventId()]['git_commit'] ?: $commit) . "\n");
-
+            } else {
+                echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getBranchEventId()]['git_commit'] ?: $commit) . ",\n";
             }
-            $this->emLog('Result: ' . $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getBranchEventId()]['git_commit'] ?: $commit) . "\n");
-            echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getBranchEventId()]['git_commit'] ?: $commit) . "\n";
 //                }
 //            }
             unset($commit);
@@ -1006,17 +1020,17 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     }
 
     /**
-     * @param array $redcapRepositories
+     * @param int $projectId
      */
-    public function setRedcapRepositories(): void
+    public function setRedcapRepositories($projectId = ''): void
     {
         $param = array(
-            'project_id' => $this->getProjectId(),
+            'project_id' => $projectId ?: $this->getProjectId(),
             'return_format' => 'array',
 //            'events' => $this->getBranchEventId()
         );
         $data = REDCap::getData($param);
-        $this->emLog($data);
+        //$this->emLog($data);
         $this->redcapRepositories = $data;
     }
 
@@ -1069,7 +1083,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 \REDCap::logEvent("Travis Build body");
                 \REDCap::logEvent(implode(',', $body));
                 $this->emLog("Travis Build body");
-                $this->emLog(implode(',', $body));
+                //$this->emLog(implode(',', $body));
             } else {
                 \REDCap::logEvent("Travis CI build failed. Please see Travis CI logs for more details.");
                 throw new \Exception("Travis CI build failed. Please see Travis CI logs for more details.");
@@ -1258,5 +1272,57 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         $this->client = $client;
     }
 
+    /**
+     * this daily cron will sync PID 16000 commits with Github.
+     * @return void
+     * @throws GuzzleException runSyncCommitsCron
+     */
+    public function runSyncCommitsCron()
+    {
+        // workaround to set pid for EM manager project.
+        foreach ($this->getRedcapRepositories() as $recordId => $repository) {
+            $key = Repository::getGithubKey($repository[$this->getFirstEventId()]['git_url']);
+            if (!$key) {
+                continue;
+            }
+            $this->emLog('EM Key: ' . $key);
+
+            $options = parseEnum($this->getProject()->metadata['deploy']['element_enum']);
+            $deployments = $repository[$this->getFirstEventId()]['deploy'];
+            foreach ($deployments as $name => $deployment) {
+                if (!$deployment) {
+                    continue;
+                }
+
+                $eventId = $this->searchEventViaDescription($options[$name]);
+                $branch = $repository[$eventId]['git_branch'];
+                $commit = $repository[$eventId]['git_commit'];
+                list($branch, $latestCommit) = $this->getRepositoryBranchLatestCommit($key, $branch);
+                // check what is in github and what we have in redcap.
+                if ($latestCommit->sha != $commit) {
+                    $data[\REDCap::getRecordIdField()] = $recordId;
+                    $data['git_commit'] = $latestCommit->sha;
+                    $data['redcap_event_name'] = \REDCap::getEventNames(true, true, $eventId);
+                    $response = \REDCap::saveData($this->getProjectId(), 'json', json_encode(array($data)));
+                    if (!empty($response['errors'])) {
+                        $this->emError($response['errors']);
+                    } else {
+                        $this->emLog("$key commits was synced with Github!");
+                    }
+                } else {
+                    $this->emLog("$key commits is up to date with Github. No changes are done.");
+                }
+            }
+        }
+    }
+
+    public function syncExternalModulesCommits()
+    {
+        $client = new \GuzzleHttp\Client();
+        $id = $this->getSystemSetting('em-project-id');
+        $url = $this->getUrl("ajax/sync_commits.php", true) . '&pid=' . $id;
+        $client->request('GET', $url, array(\GuzzleHttp\RequestOptions::SYNCHRONOUS => true));
+        $this->emDebug("running cron for $url on project " . $id);
+    }
 
 }

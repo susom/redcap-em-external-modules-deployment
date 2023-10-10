@@ -795,7 +795,18 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             }
             // only write if branch and last commit different from what is saved in redcap.
             if ($repository[$this->getFirstEventId()]['deploy_version']) {
-                $version = $repository[$this->getFirstEventId()]['deploy_version'];
+                // EM releases might have multiple versions.
+                if ($repository[$this->getFirstEventId()]['module_release_url'] != '') {
+                    $temp = str_replace(' ', '', $repository[$this->getFirstEventId()]['deploy_version']);
+                    $versions = explode(',', $temp);
+                    if (count($versions) == 1) {
+                        $version = end($versions);
+                    }
+                }else{
+                    $version = $repository[$this->getFirstEventId()]['deploy_version'];
+                }
+
+
             } else {
                 $version = "9.9.9";
             }
@@ -809,7 +820,16 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             // if a release is set use it to pull EM files.
             if ($repository[$this->getFirstEventId()]['module_release_url'] != '') {
                 $release = $repository[$this->getFirstEventId()]['module_release_url'];
-                echo ",$folder" . "_v$version,,," . $release . "\n";
+                if (isset($versions) and count($versions) > 1) {
+                    foreach ($versions as $version) {
+                        $pattern = '/[0-9\.]*.zip/m';
+                        $release = preg_replace($pattern, $version . '.zip', $release);
+                        echo ",$folder" . "_v$version,,," . $release . "\n";
+                    }
+                } else {
+                    echo ",$folder" . "_v$version,,," . $release . "\n";
+                }
+
 
             } else {
                 echo $repository[$this->getFirstEventId()]['git_url'] . ',' . $folder . "_v$version," . ($repository[$this->getBranchEventId()]['git_branch'] ?: $branch) . "," . ($repository[$this->getBranchEventId()]['git_commit'] ?: $commit) . ",\n";

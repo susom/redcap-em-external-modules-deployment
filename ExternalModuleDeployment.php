@@ -1100,9 +1100,8 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 )))
             ]);
             if ($response->getStatusCode() < 300) {
-                $body = json_decode($response->getBody(), true);
-                \REDCap::logEvent("Travis Build body");
-                \REDCap::logEvent(implode(',', $body));
+//                $body = json_decode($response->getBody(), true);
+                \REDCap::logEvent("Travis Build body", $response->getBody());
                 $this->emLog("Travis Build body");
                 //$this->emLog(implode(',', $body));
             } else {

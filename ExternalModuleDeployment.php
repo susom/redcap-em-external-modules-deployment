@@ -453,10 +453,10 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         $arr = array_keys($this->getProject()->forms[$instrument]['fields']);
         $field_list = "'" . implode("','", $arr) . "'";
 
-
+        $data_table = method_exists('\REDCap', 'getDataTable') ? \REDCap::getDataTable($project_id) : "redcap_data";
         $query_string = sprintf(
             "SELECT COALESCE(MAX(IFNULL(instance,1)),0)+1 AS next_instance
-        FROM redcap_data WHERE
+        FROM $data_table WHERE
         `project_id` = %u
         AND `event_id` = %u
         AND `record`=%s

@@ -20,24 +20,7 @@ use \Firebase\JWT\JWT;
 
 
 /**
- * Class ExternalModuleDeployment
- * @package Stanford\ExternalModuleDeployment
- * @property string $pta
- * @property User $user
- * @property Repository $repository
- * @property Client $client
- * @property array $repositories
- * @property Project $project
- * @property string $jwt
- * @property string $accessToken
- * @property \GuzzleHttp\Client $guzzleClient
- * @property array $redcapRepositories
- * @property \stdClass $redcapBuildRepoObject
- * @property string $defaultREDCapBuildRepoBranch
- * @property string $ShaForBranchCommitForREDCapBuild
- * @property array $gitRepositoriesDirectories
- * @property string $commitBranch
- * @property int $branchEventId
+ *
  */
 class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 {
@@ -76,6 +59,12 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     private $branchEventId;
 
     private $client;
+
+    private $savedBuildNumber = null;
+    private $deployedBuildNumber = null;
+
+    private $emDirectories = array();
+    private $externalModules = array();
 
     /**
      * @throws \Exception
@@ -802,7 +791,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                     if (count($versions) == 1) {
                         $version = end($versions);
                     }
-                }else{
+                } else {
                     $version = $repository[$this->getFirstEventId()]['deploy_version'];
                 }
 
@@ -1345,4 +1334,245 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
         $this->emDebug("running cron for $url on project " . $id);
     }
 
+    public function syncExternalModulesVersions()
+    {
+        if ($this->getSavedBuildNumber() != $this->getDeployedBuildNumber()) {
+            $this->processExternalModulesVersions();
+        }
+    }
+
+    /**
+     * Compare each EM deployed and saved version. then do one of following:
+     * 1. disable EM if it does not exist in new build. Because it was disabled in pid 16000.
+     * 2. upgrade EM if deployed  version is larger than saved one.
+     * 3. downgrade EM if deployed version is smaller than saved one.
+     * 4. do nothing if deployed and saved version are the same.
+     * @throws GuzzleException
+     * @throws \Exception
+     */
+    private function processExternalModulesVersions()
+    {
+        try {
+            $sql = db_query("SELECT rem.directory_prefix, SUBSTR(rems.value,2) as version, rems.value as full_version, rem.external_module_id
+                            FROM redcap_external_modules rem
+                                     JOIN redcap_external_module_settings rems
+                                          ON rem.external_module_id = rems.external_module_id
+                                    WHERE `key` = 'version'");
+
+            while ($row = db_fetch_assoc($sql)) {
+
+                $deployedVersion = $this->getExternalModuleDeployedVersion($row['directory_prefix']);
+                $deployedNumber = (int)(str_replace('.', '', $deployedVersion));
+
+                $savedVersion = $row['version'];
+                $savedNumber = (int)(str_replace('.', '', $savedVersion));
+
+                if ($deployedNumber == $savedNumber) {
+                    $message = 'no_change';
+                } else {
+                    if (is_null($deployedNumber)) {
+                        $message = 'no_longer_exists';
+                        $this->disableExternalModule($row['directory_prefix']);
+                    } elseif ($deployedNumber > $savedNumber) {
+                        $message = 'upgrade';
+                        $this->updateExternalModuleVersion($row['directory_prefix'], $deployedVersion);
+                    } else {
+                        $message = 'downgrade';
+                        $this->updateExternalModuleVersion($row['directory_prefix'], $deployedVersion);
+                    }
+                    $this->pushNotificationToSlack($this->buildSlackMessage($row['directory_prefix'], $message, $deployedVersion, $savedVersion));
+                }
+
+                $this->externalModules[$row['directory_prefix']] = array(
+                    'message' => $message,
+                    'saved' => $row['version'],
+                    'deployed' => $this->getExternalModuleDeployedVersion($row['directory_prefix'])
+                );
+
+            }
+        } catch (GuzzleException $e) {
+            $this->pushNotificationToSlack('Error happen while updating EM versions. ' . $e->getMessage());
+        } catch (\Exception $e) {
+            $this->pushNotificationToSlack('Error happen while updating EM versions. ' . $e->getMessage());
+        }
+
+        // build summary
+        $this->buildSummaryLog();
+
+        // finally update build number in redcap_config.
+        $this->updateSavedBuildNumber($this->getDeployedBuildNumber());
+    }
+
+    /**
+     * Build and save cron summary log to build_logs.
+     * @return void
+     * @throws \Exception
+     */
+    public function buildSummaryLog()
+    {
+        $text = '';
+        foreach ($this->externalModules as $prefix => $externalModule){
+            $text .= $this->buildSlackMessage($prefix, $externalModule['message'], $externalModule['deployed'], $externalModule['saved']) . "\n";
+        }
+        $file = fopen(__DIR__ . "/../../build_logs/external_modules_cleanup.txt", "w") or throw new \Exception("cant open file");;
+        fwrite($file, $text);
+        fclose($file);
+    }
+
+    /**
+     * Build message to be pushed to Slack.
+     * @param $directory_prefix
+     * @param $abbr
+     * @param $dist_version
+     * @param $source_version
+     * @return string
+     */
+    public function buildSlackMessage($directory_prefix, $abbr, $dist_version = null, $source_version = null)
+    {
+        switch ($abbr) {
+            case 'no_change':
+                $message = "`[$directory_prefix]` has no change";
+                break;
+            case 'no_longer_exists':
+                $message = "`[$directory_prefix]` was disabled because no EM folder found in modules folder";
+                break;
+            case 'downgrade':
+                $message = "`[$directory_prefix]` was downgraded from *$source_version* to *$dist_version*";
+                break;
+            case 'upgrade':
+                $message = "`[$directory_prefix]` was upgraded from *$source_version* to *$dist_version*";
+                break;
+            default:
+                $message = "`[$directory_prefix]` has an error please check your EM settings and deployment.";
+        }
+        return $message;
+    }
+
+    /**
+     * Push a notification to slack. webhook URL saved in EM system settings.
+     * @throws GuzzleException
+     */
+    public function pushNotificationToSlack($message)
+    {
+        $headers = [
+            'Content-Type' => 'text/plain'
+        ];
+        $body = array('text' => $message);
+
+        $res = $this->getClient()->getGuzzleClient()->post($this->getSystemSetting('slack-webhook'), [
+            'headers' => $headers,
+            'body' => json_encode($body)
+        ]);
+    }
+
+    /**
+     * Use REDCap Built in method to disable EM.
+     * @param $directory_prefix
+     * @return void
+     */
+    private function disableExternalModule($directory_prefix)
+    {
+        	ExternalModules::disable($directory_prefix, false);
+    }
+
+    /**
+     * Use REDCap Built in method to update EM version.
+     * @throws \Exception
+     */
+    private function updateExternalModuleVersion($directory_prefix, $newVersion)
+    {
+        if(!$newVersion){
+            throw new \Exception("[$directory_prefix] Version is NUll.");
+        }
+        //prefix version with 'v'
+        $newVersion = 'v' . $newVersion;
+        $exception = ExternalModules::enableAndCatchExceptions($directory_prefix, $newVersion);
+        if($exception){
+            throw new \Exception($exception);
+        }
+    }
+
+    /**
+     * get defined EM folders
+     * @return string[]
+     */
+    public function getExternalModulesAltPath()
+    {
+        $sql = db_query("SELECT `value` FROM redcap.redcap_config WHERE field_name = 'external_module_alt_paths'");
+        $row = db_fetch_assoc($sql);
+        return $row['value'] ? explode('|', $row['value']) : array('modules');
+    }
+
+    /**
+     * loop over EM folders to get EM version.
+     * @param $directory_prefix
+     * @return mixed|null
+     */
+    private function getExternalModuleDeployedVersion($directory_prefix)
+    {
+        $version = null;
+
+        $external_module_alt_paths = $this->getExternalModulesAltPath();
+        foreach ($external_module_alt_paths as $item) {
+            $item = trim($item);
+            $this->emDirectories = new \DirectoryIterator(__DIR__ . "/../../$item");
+            foreach ($this->emDirectories as $fileinfo) {
+                if ($fileinfo->isDir() && !$fileinfo->isDot()) {
+                    if (str_contains($fileinfo->getFilename(), $directory_prefix)) {
+                        $re = '/\d.+$/m';
+                        preg_match_all($re, $fileinfo->getFilename(), $matches, PREG_SET_ORDER, 0);
+                        if (empty($matches)) {
+                            return null;
+                        } else {
+                            return end($matches)[0];
+                        }
+                    }
+                }
+            }
+        }
+
+        return $version;
+
+    }
+
+    /**
+     * Insert/update Travis build number saved in redcap_config.
+     * @param $buildNumber
+     * @return void
+     */
+    private function updateSavedBuildNumber($buildNumber)
+    {
+        $sql = db_query("REPLACE INTO redcap_config (field_name, value)  VALUES ('kubernetes_build_number', $buildNumber)");
+    }
+
+    /**
+     * get Travis build number saved in redcap_config
+     * @return mixed
+     */
+    private function getSavedBuildNumber()
+    {
+        if (!$this->savedBuildNumber) {
+            $sql = db_query("SELECT `value` FROM redcap_config WHERE field_name ='kubernetes_build_number'");
+            $row = db_fetch_assoc($sql);
+            if (!empty($row)) {
+                $this->savedBuildNumber = $row['value'];
+            }
+        }
+        return $this->savedBuildNumber;
+
+    }
+
+    /**
+     * get Travis build number saved in build_logs file.
+     */
+    private function getDeployedBuildNumber()
+    {
+        if (!$this->deployedBuildNumber) {
+            $filePath = __DIR__ . '/../../build_logs/build_number.txt';
+            if (file_exists($filePath)) {
+                $this->deployedBuildNumber = trim(file_get_contents($filePath));
+            }
+        }
+        return $this->deployedBuildNumber;
+    }
 }

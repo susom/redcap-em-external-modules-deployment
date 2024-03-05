@@ -1095,6 +1095,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 ],
                 'body' => json_encode(array('request' => array(
                     //'branch' => $this->getDefaultREDCapBuildRepoBranch(),
+                    'message' => $message,
                     'branch' => $branch,
                     'sha' => $this->getShaForBranchCommitForREDCapBuild($branch)
                 )))

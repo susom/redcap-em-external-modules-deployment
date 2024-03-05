@@ -96,6 +96,12 @@
       "type": "project-id"
     },
     {
+      "key": "slack-webhook",
+      "name": "Slack webhook to push notifications",
+      "required": false,
+      "type": "text"
+    },
+    {
       "key": "enable-system-debug-logging",
       "name": "<b>Enable Debug Logging (system-wide)</b><i>(optional)</i> Requires installation and configuration of emLogger",
       "required": false,
@@ -109,6 +115,13 @@
       "method": "syncExternalModulesCommits",
       "cron_frequency": "86400",
       "cron_max_run_time": "3600"
+    },
+    {
+      "cron_name": "sync_ems_version",
+      "cron_description": "This Cron will run every 5 minutes to check if a new build is deployed. When new build is deployed cron will check deployed EM version with DB saved version. ",
+      "method": "syncExternalModulesVersions",
+      "cron_frequency": "300",
+      "cron_max_run_time": "100"
     }
   ],
   "compatibility": {

@@ -172,9 +172,10 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                             if ($this->updateInstanceCommitInformation($event, $record, $key, $nonDefaultCommit->sha, $nonDefaultCommit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $nonDefaultBranch, $autoDeploy)) {
                                 // if the deploy_instace changed then trigger travis
                                 if ($deploy_instance != $this->shouldDeployInstance($data[$record], $branch)) {
-                                    $this->triggerTravisCIBuild($branch, $nonDefaultCommit->commit->message);
-                                    $this->emLog(USERID . "Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $nonDefaultCommit->sha);
-                                    \REDCap::logEvent(USERID . " Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $nonDefaultCommit->sha);
+                                    $message = USERID . " Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $nonDefaultCommit->sha;
+                                    $this->triggerTravisCIBuild($branch, $message);
+                                    $this->emLog($message);
+                                    \REDCap::logEvent($message);
 
                                 } else {
                                     $this->emLog("Travis build webhook was ignored because no EM was disabled.");
@@ -187,9 +188,10 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
                         if ($this->updateInstanceCommitInformation($event, $record, $key, $commit->sha, $commit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $commitBranch, $autoDeploy)) {
                             if ($this->isCommitChanged($data[$event]['git_commit'], $commit->sha)) {
-                                $this->triggerTravisCIBuild($branch, $commit->commit->message);
-                                $this->emLog(USERID . "Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $commit->sha);
-                                \REDCap::logEvent(USERID . "Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $commit->sha);
+                                $message = USERID . " Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $commit->sha;
+                                $this->triggerTravisCIBuild($branch, $message);
+                                $this->emLog($message);
+                                \REDCap::logEvent($message);
                             } else {
                                 $this->emLog("Travis build webhook was ignored because no change in commit hash.");
                                 \REDCap::logEvent("Travis build webhook was ignored because no change in commit hash.");
@@ -227,9 +229,10 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             // if commit are different between
             if ($this->isCommitChanged($data[$record][$event_id]['git_commit'], $commit->sha)) {
                 if ($this->updateInstanceCommitInformation($event_id, $record, $key, $commit->sha, $commit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $commitBranch, $data[$record][$event_id]['auto_deploy'])) {
-                    $this->triggerTravisCIBuild($branch, $commit->commit->message);
-                    $this->emLog("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $commit->sha);
-                    \REDCap::logEvent("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $commit->sha);
+                    $message = USERID . " Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $commit->sha;
+                    $this->triggerTravisCIBuild($branch, $message);
+                    $this->emLog($message);
+                    \REDCap::logEvent($message);
                 }
             } else {
                 $this->emLog("Travis build webhook was ignored because no change in commit hash.");
@@ -377,10 +380,10 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
                     $dataSaved = $this->updateInstanceCommitInformation($event, $recordId, $payload['repository']['name'], $payload['after'], $commit['timestamp'], $this->shouldDeployInstance($repository, $branch), $commitBranch, $canBuild);
                     if ($canBuild && $dataSaved) {
-
-                        $this->triggerTravisCIBuild($branch, $commit['message']);
-                        $this->emLog("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $payload['after']);
-                        \REDCap::logEvent("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $payload['after']);
+                        $message = USERID . " Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $payload['after'];
+                        $this->triggerTravisCIBuild($branch, $message);
+                        $this->emLog($message);
+                        \REDCap::logEvent($message);
 
                     } else {
                         // currently, we are only logging to avoid breaking the loop.

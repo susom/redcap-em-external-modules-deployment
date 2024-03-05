@@ -172,7 +172,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                             if ($this->updateInstanceCommitInformation($event, $record, $key, $nonDefaultCommit->sha, $nonDefaultCommit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $nonDefaultBranch, $autoDeploy)) {
                                 // if the deploy_instace changed then trigger travis
                                 if ($deploy_instance != $this->shouldDeployInstance($data[$record], $branch)) {
-                                    $this->triggerTravisCIBuild($branch);
+                                    $this->triggerTravisCIBuild($branch, $nonDefaultCommit->commit->message);
                                     $this->emLog(USERID . "Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $nonDefaultCommit->sha);
                                     \REDCap::logEvent(USERID . " Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $nonDefaultCommit->sha);
 
@@ -187,7 +187,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
                         if ($this->updateInstanceCommitInformation($event, $record, $key, $commit->sha, $commit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $commitBranch, $autoDeploy)) {
                             if ($this->isCommitChanged($data[$event]['git_commit'], $commit->sha)) {
-                                $this->triggerTravisCIBuild($branch);
+                                $this->triggerTravisCIBuild($branch, $commit->commit->message);
                                 $this->emLog(USERID . "Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $commit->sha);
                                 \REDCap::logEvent(USERID . "Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $commit->sha);
                             } else {
@@ -227,7 +227,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             // if commit are different between
             if ($this->isCommitChanged($data[$record][$event_id]['git_commit'], $commit->sha)) {
                 if ($this->updateInstanceCommitInformation($event_id, $record, $key, $commit->sha, $commit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $commitBranch, $data[$record][$event_id]['auto_deploy'])) {
-                    $this->triggerTravisCIBuild($branch);
+                    $this->triggerTravisCIBuild($branch, $commit->commit->message);
                     $this->emLog("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $commit->sha);
                     \REDCap::logEvent("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $commit->sha);
                 }

@@ -172,7 +172,8 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                             if ($this->updateInstanceCommitInformation($event, $record, $key, $nonDefaultCommit->sha, $nonDefaultCommit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $nonDefaultBranch, $autoDeploy)) {
                                 // if the deploy_instace changed then trigger travis
                                 if ($deploy_instance != $this->shouldDeployInstance($data[$record], $branch)) {
-                                    $this->triggerTravisCIBuild($branch);
+                                    $message = USERID . " Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $nonDefaultCommit->sha;
+                                    $this->triggerTravisCIBuild($branch, $nonDefaultCommit->commit->committer->name . ' ' . $nonDefaultCommit->commit->message);
                                     $this->emLog(USERID . "Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $nonDefaultCommit->sha);
                                     \REDCap::logEvent(USERID . " Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $nonDefaultCommit->sha);
 
@@ -187,7 +188,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
 
                         if ($this->updateInstanceCommitInformation($event, $record, $key, $commit->sha, $commit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $commitBranch, $autoDeploy)) {
                             if ($this->isCommitChanged($data[$event]['git_commit'], $commit->sha)) {
-                                $this->triggerTravisCIBuild($branch);
+                                $this->triggerTravisCIBuild($branch, $commit->commit->committer->name . ' ' . $commit->commit->message);
                                 $this->emLog(USERID . "Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $commit->sha);
                                 \REDCap::logEvent(USERID . "Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $commit->sha);
                             } else {
@@ -227,7 +228,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
             // if commit are different between
             if ($this->isCommitChanged($data[$record][$event_id]['git_commit'], $commit->sha)) {
                 if ($this->updateInstanceCommitInformation($event_id, $record, $key, $commit->sha, $commit->commit->author->date, $this->shouldDeployInstance($data[$record], $branch), $commitBranch, $data[$record][$event_id]['auto_deploy'])) {
-                    $this->triggerTravisCIBuild($branch);
+                    $this->triggerTravisCIBuild($branch, $commit->commit->committer->name . ' ' . $commit->commit->message);
                     $this->emLog("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $commit->sha);
                     \REDCap::logEvent("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $commit->sha);
                 }
@@ -378,7 +379,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                     $dataSaved = $this->updateInstanceCommitInformation($event, $recordId, $payload['repository']['name'], $payload['after'], $commit['timestamp'], $this->shouldDeployInstance($repository, $branch), $commitBranch, $canBuild);
                     if ($canBuild && $dataSaved) {
 
-                        $this->triggerTravisCIBuild($branch);
+                        $this->triggerTravisCIBuild($branch, $commit['message']);
                         $this->emLog("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $payload['after']);
                         \REDCap::logEvent("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $payload['after']);
 
@@ -1072,7 +1073,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     /**
      * this function will call travis CI api
      */
-    public function triggerTravisCIBuild($branch)
+    public function triggerTravisCIBuild($branch, $message = '')
     {
         try {
             $response = $this->getClient()->getGuzzleClient()->post('https://api.travis-ci.com/repo/susom%2Fredcap-build/requests', [
@@ -1084,6 +1085,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 ],
                 'body' => json_encode(array('request' => array(
                     //'branch' => $this->getDefaultREDCapBuildRepoBranch(),
+                    'message' => $message,
                     'branch' => $branch,
                     'sha' => $this->getShaForBranchCommitForREDCapBuild($branch)
                 )))

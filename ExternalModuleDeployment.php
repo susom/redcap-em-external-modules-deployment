@@ -378,7 +378,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                     $dataSaved = $this->updateInstanceCommitInformation($event, $recordId, $payload['repository']['name'], $payload['after'], $commit['timestamp'], $this->shouldDeployInstance($repository, $branch), $commitBranch, $canBuild);
                     if ($canBuild && $dataSaved) {
 
-                        $this->triggerTravisCIBuild($branch);
+                        $this->triggerTravisCIBuild($branch, $commit['message']);
                         $this->emLog("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $payload['after']);
                         \REDCap::logEvent("Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $payload['after']);
 
@@ -1072,7 +1072,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
     /**
      * this function will call travis CI api
      */
-    public function triggerTravisCIBuild($branch)
+    public function triggerTravisCIBuild($branch, $message = '')
     {
         try {
             $response = $this->getClient()->getGuzzleClient()->post('https://api.travis-ci.com/repo/susom%2Fredcap-build/requests', [
@@ -1084,6 +1084,7 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                 ],
                 'body' => json_encode(array('request' => array(
                     //'branch' => $this->getDefaultREDCapBuildRepoBranch(),
+                    'message' => $message,
                     'branch' => $branch,
                     'sha' => $this->getShaForBranchCommitForREDCapBuild($branch)
                 )))

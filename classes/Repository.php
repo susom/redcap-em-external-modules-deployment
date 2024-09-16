@@ -75,6 +75,30 @@ class Repository
         return json_decode($commits->getBody());
     }
 
+
+    public function triggerGithubAction($key, $workflowId, $branch, $message = '')
+    {
+        if (!$workflowId || !$key || !$branch) {
+            throw new \Exception("Github action name is missing for $key in branch: $branch");
+        }
+
+        $response = $this->getClient()->getGuzzleClient()->post('https://api.github.com/repos/susom/' . $key . "/actions/workflows/redcap-build.yaml/dispatches", [
+            "headers" => [
+                'Authorization' => 'token ' . $this->getClient()->getAccessToken(),
+                'Accept' => 'application/vnd.github.v3+json'
+            ],
+            'json' => [
+                'ref' => $branch,  // The branch you want to trigger the workflow on
+            ],
+        ]);
+
+        if ($response->getStatusCode() == 204) {
+            echo "Workflow triggered successfully for branch: $branch";
+        } else {
+            echo "Failed to trigger workflow. Status code: " . $response->getStatusCode();
+        }
+    }
+
     /**
      * @param $key
      * @return mixed

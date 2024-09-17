@@ -10,6 +10,8 @@ try {
         $module->testGithub(htmlentities($_POST['repo'], ENT_QUOTES), htmlentities($_POST['command'], ENT_QUOTES));
     }
 
+
+    $module->getRepository()->triggerGithubAction('redcap-build', 10829396389, 'som-prod', 'Github actions Hello World!');
     //$module->syncExternalModulesCommits();
 
 

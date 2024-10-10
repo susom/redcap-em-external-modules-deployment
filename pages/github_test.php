@@ -11,7 +11,7 @@ try {
     }
 
 
-    //$module->getRepository()->triggerGithubAction('redcap-build', 'oncore-dev', 'Github actions Hello World!');
+    //$module->getRepository()->triggerGithubAction( 'oncore-dev', 'Github actions Hello World!');
     //$module->syncExternalModulesCommits();
 
 

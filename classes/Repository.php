@@ -76,19 +76,22 @@ class Repository
     }
 
 
-    public function triggerGithubAction($key, $workflowId, $branch, $message = '')
+    public function triggerGithubAction($branch, $message = '',  $key = 'redcap-build', $workflowId= "redcap-build.yaml")
     {
         if (!$workflowId || !$key || !$branch) {
             throw new \Exception("Github action name is missing for $key in branch: $branch");
         }
 
-        $response = $this->getClient()->getGuzzleClient()->post('https://api.github.com/repos/susom/' . $key . "/actions/workflows/redcap-build.yaml/dispatches", [
+        $response = $this->getClient()->getGuzzleClient()->post("https://api.github.com/repos/susom/$key/actions/workflows/$workflowId/dispatches", [
             "headers" => [
                 'Authorization' => 'token ' . $this->getClient()->getAccessToken(),
                 'Accept' => 'application/vnd.github.v3+json'
             ],
             'json' => [
                 'ref' => $branch,  // The branch you want to trigger the workflow on
+                'inputs' => [
+                    'message' => $message,
+                ],
             ],
         ]);
 

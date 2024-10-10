@@ -96,9 +96,9 @@ class Repository
         ]);
 
         if ($response->getStatusCode() == 204) {
-            echo "Workflow triggered successfully for branch: $branch";
+            return "Workflow triggered successfully for branch: $branch";
         } else {
-            echo "Failed to trigger workflow. Status code: " . $response->getStatusCode();
+            return "Failed to trigger workflow. Status code: " . $response->getStatusCode();
         }
     }
 

@@ -187,10 +187,12 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                                     $this->triggerTravisCIBuild($branch, $message);
                                     $key = Repository::getGithubKey($this->getProjectSetting('redcap-build-github-repo'));
 
-                                    $this->getRepository()->triggerGithubAction($branch, $message, $key);
-                                    $this->emLog(USERID . "Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $nonDefaultCommit->sha);
+                                    $responses  = $this->getRepository()->triggerGithubAction($branch, $message, $key);
+                                    $this->emDebug(USERID . "Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $nonDefaultCommit->sha);
                                     \REDCap::logEvent(USERID . " Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $nonDefaultCommit->sha);
                                     \REDCap::logEvent(USERID . " Github actions trigger for branch $branch by EM $key with commit hash: " . $nonDefaultCommit->sha);
+                                    \REDCap::logEvent($responses);
+                                    $this->emDebug($responses);
 
 
                                 } else {

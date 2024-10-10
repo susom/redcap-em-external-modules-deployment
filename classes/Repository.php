@@ -90,7 +90,7 @@ class Repository
             'json' => [
                 'ref' => $branch,  // The branch you want to trigger the workflow on
                 'inputs' => [
-                    'run-name' => $message,
+                    'message' => $message,
                 ],
             ],
         ]);

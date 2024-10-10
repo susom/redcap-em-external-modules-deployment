@@ -190,6 +190,8 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
                                     $this->getRepository()->triggerGithubAction($branch, $message, $key);
                                     $this->emLog(USERID . "Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $nonDefaultCommit->sha);
                                     \REDCap::logEvent(USERID . " Travis build webhook triggered for branch $branch by EM $key with commit hash: " . $nonDefaultCommit->sha);
+                                    \REDCap::logEvent(USERID . " Github actions trigger for branch $branch by EM $key with commit hash: " . $nonDefaultCommit->sha);
+
 
                                 } else {
                                     $this->emLog("Travis build webhook was ignored because no EM was disabled.");

@@ -1110,33 +1110,33 @@ class ExternalModuleDeployment extends \ExternalModules\AbstractExternalModule
      */
     public function triggerTravisCIBuild($branch, $message = '')
     {
-        try {
-            $response = $this->getClient()->getGuzzleClient()->post('https://api.travis-ci.com/repo/susom%2Fredcap-build/requests', [
-                'headers' => [
-                    'Authorization' => 'token ' . $this->getProjectSetting('travis-ci-api-token'),
-                    'Accept' => 'application/json',
-                    'Content-Type' => 'application/json',
-                    'Travis-API-Version' => '3',
-                ],
-                'body' => json_encode(array('request' => array(
-                    //'branch' => $this->getDefaultREDCapBuildRepoBranch(),
-                    'message' => $message,
-                    'branch' => $branch,
-                    'sha' => $this->getShaForBranchCommitForREDCapBuild($branch)
-                )))
-            ]);
-            if ($response->getStatusCode() < 300) {
-//                $body = json_decode($response->getBody(), true);
-                \REDCap::logEvent("Travis Build body", $response->getBody());
-                $this->emLog("Travis Build body");
-                //$this->emLog(implode(',', $body));
-            } else {
-                \REDCap::logEvent("Travis CI build failed. Please see Travis CI logs for more details.");
-                throw new \Exception("Travis CI build failed. Please see Travis CI logs for more details.");
-            }
-        } catch (GuzzleException $e) {
-            echo $e->getMessage();
-        }
+//        try {
+//            $response = $this->getClient()->getGuzzleClient()->post('https://api.travis-ci.com/repo/susom%2Fredcap-build/requests', [
+//                'headers' => [
+//                    'Authorization' => 'token ' . $this->getProjectSetting('travis-ci-api-token'),
+//                    'Accept' => 'application/json',
+//                    'Content-Type' => 'application/json',
+//                    'Travis-API-Version' => '3',
+//                ],
+//                'body' => json_encode(array('request' => array(
+//                    //'branch' => $this->getDefaultREDCapBuildRepoBranch(),
+//                    'message' => $message,
+//                    'branch' => $branch,
+//                    'sha' => $this->getShaForBranchCommitForREDCapBuild($branch)
+//                )))
+//            ]);
+//            if ($response->getStatusCode() < 300) {
+////                $body = json_decode($response->getBody(), true);
+//                \REDCap::logEvent("Travis Build body", $response->getBody());
+//                $this->emLog("Travis Build body");
+//                //$this->emLog(implode(',', $body));
+//            } else {
+//                \REDCap::logEvent("Travis CI build failed. Please see Travis CI logs for more details.");
+//                throw new \Exception("Travis CI build failed. Please see Travis CI logs for more details.");
+//            }
+//        } catch (GuzzleException $e) {
+//            echo $e->getMessage();
+//        }
     }
 
     /**
